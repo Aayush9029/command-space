@@ -25,6 +25,8 @@ use iced::{
 use iced::{event, window};
 
 use log::{info, warn};
+use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::{Matcher, Utf32Str};
 use objc2::rc::Retained;
 use objc2_app_kit::NSRunningApplication;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -34,6 +36,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead};
 use tray_icon::TrayIcon;
 use url::Url;
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::time::Duration;
@@ -56,15 +59,22 @@ struct AppIndex {
 impl AppIndex {
     /// Search for an element in the index that starts with the provided prefix
     fn search_prefix<'a>(&'a self, prefix: &'a str) -> impl ParallelIterator<Item = &'a App> + 'a {
+        let pattern = Pattern::parse(prefix, CaseMatching::Ignore, Normalization::Smart);
+
         self.by_name.par_iter().filter_map(move |(name, app)| {
-            if name.starts_with(prefix)
-                || name.contains(format!(" {prefix}").as_str())
-                || name.contains(format!("-{prefix}").as_str())
-            {
-                Some(app)
-            } else {
-                None
+            thread_local! {
+                static MATCHER: RefCell<Matcher> = RefCell::new(
+                    Matcher::new(nucleo_matcher::Config::DEFAULT.match_paths())
+                );
             }
+
+            MATCHER.with(|m| {
+                let mut buf = Vec::new();
+                let haystack = Utf32Str::new(name, &mut buf);
+                pattern
+                    .score(haystack, &mut m.borrow_mut())
+                    .map(|_score| app)
+            })
         })
     }
 
@@ -706,7 +716,11 @@ mod tests {
             .map(|app| app.display_name.clone())
             .collect();
 
-        assert_eq!(prefix_results, vec!["Safari".to_string()]);
+        assert!(
+            prefix_results.contains(&"Visual Studio Code".to_string())
+                && prefix_results.contains(&"Signal Desktop".to_string())
+                && prefix_results.contains(&"Safari".to_string()),
+        );
         assert_eq!(spaced_results, vec!["Visual Studio Code".to_string()]);
         assert_eq!(hyphen_results, vec!["Signal Desktop".to_string()]);
     }

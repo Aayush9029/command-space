@@ -109,16 +109,4 @@ mod tests {
             ClipBoardContentType::Text("world".to_string())
         );
     }
-
-    #[test]
-    fn clipboard_to_app_truncates_and_uses_first_line_for_display() {
-        let item =
-            ClipBoardContentType::Text("abcdefghijklmnopqrstuvwxyz\nsecond line".to_string());
-
-        // let app = item.to_app();
-
-        // assert_eq!(app.display_name, "abcdefghijklmnopqrstuvwxy");
-        // assert_eq!(app.search_name, "abcdefghijklmnopqrstuvwxy");
-        // assert_eq!(app.desc, "Clipboard Item");
-    }
 }
