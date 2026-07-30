@@ -21,7 +21,6 @@ use crate::app::pages::settings::settings_page;
 use crate::app::tile::{AppIndex, Hotkeys};
 use crate::app::{DEFAULT_WINDOW_HEIGHT, HotkeyCapture, SettingsTab, ToApp, ToApps};
 use crate::config::Theme;
-use crate::database::load_clipboard;
 use crate::debounce::Debouncer;
 use crate::platform::macos::events::Event;
 use crate::styles::{
