@@ -716,7 +716,14 @@ mod tests {
             .map(|app| app.display_name.clone())
             .collect();
 
-        assert_eq!(prefix_results, vec!["Safari".to_string()]);
+        assert_eq!(
+            prefix_results,
+            vec![
+                "Visual Studio Code".to_string(),
+                "Signal Desktop".to_string(),
+                "Safari".to_string()
+            ]
+        );
         assert_eq!(spaced_results, vec!["Visual Studio Code".to_string()]);
         assert_eq!(hyphen_results, vec!["Signal Desktop".to_string()]);
     }
