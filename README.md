@@ -16,7 +16,7 @@
   <a href="https://github.com/MystikoLab/rustcast/releases">
     <img alt="Downloads" src="https://img.shields.io/github/downloads/MystikoLab/rustcast/total?style=flat-square" />
   </a>
-  <a href="https://discord.gg/bDfNYPbnC5">
+  <a href="https://discord.mystikolabs.com">
     <img alt="Discord" src="https://img.shields.io/discord/1463119282459119844?label=Discord&logo=discord&logoColor=white&style=flat-square" />
   </a>
   <a href="https://github.com/MystikoLab/rustcast/stargazers">
