@@ -206,6 +206,7 @@ pub enum SetConfigFields {
     SetPage(MainPage),
     SetEventDuration(String),
     SetShowOnStartup(bool),
+    Blacklist(Editable<String>),
     Modes(Editable<(String, String)>),
     Aliases(Editable<(String, String)>),
     SearchDirs(Editable<String>),

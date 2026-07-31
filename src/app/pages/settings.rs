@@ -879,6 +879,8 @@ fn commands_tab(
         modes_item(config.modes.clone(), &theme),
         section_header_with_reset("Search Directories", ResetField::SearchDirs, theme.clone()),
         search_dirs_item(&theme, config.search_dirs.clone()),
+        section_header_with_reset("Blacklist", ResetField::SearchDirs, theme.clone()),
+        blacklist_item(&theme, config.blacklist.clone()),
         Space::new().height(10).into(),
         section_header_with_reset("Shell commands", ResetField::ShellCommands, theme.clone()),
         shell_commands_item(config.shells.clone(), theme.clone(), hotkey_capture),
@@ -1108,6 +1110,57 @@ fn search_dirs_item(theme: &Theme, search_dirs: Vec<String>) -> Element<'static,
         .align_y(Alignment::Center)
         .into(),
         dir_adder_button("+", theme.to_owned()).into(),
+    ])
+    .spacing(10)
+    .height(Length::Fill)
+    .width(Length::Fill)
+    .align_x(Alignment::Center)
+    .into()
+}
+
+fn blacklist_item(theme: &Theme, blacklist: Vec<String>) -> Element<'static, Message> {
+    Column::from_iter([
+        container(
+            Column::from_iter(blacklist.iter().map(|item| {
+                let theme_clone_2 = theme.clone();
+                let blacklist_item = item.clone();
+                let blacklist_item_clone = blacklist_item.clone();
+                container(
+                    Row::from_iter([
+                        text_input_cell(blacklist_item.clone(), &theme_clone_2, "App name")
+                            .on_input(move |input| {
+                                Message::SetConfig(SetConfigFields::Blacklist(Editable::Update {
+                                    old: blacklist_item_clone.clone(),
+                                    new: input,
+                                }))
+                            })
+                            .into(),
+                        Button::new("Delete")
+                            .on_press(Message::SetConfig(SetConfigFields::Blacklist(
+                                Editable::Delete(blacklist_item.clone()),
+                            )))
+                            .style(move |_, _| delete_button_style(&theme_clone_2))
+                            .into(),
+                    ])
+                    .spacing(10)
+                    .align_y(Alignment::Center),
+                )
+                .width(Length::Fill)
+                .align_x(Alignment::Center)
+                .into()
+            }))
+            .spacing(10),
+        )
+        .height(Length::Fill)
+        .width(Length::Fill)
+        .align_x(Alignment::Center)
+        .align_y(Alignment::Center)
+        .into(),
+        dir_adder_button("+", theme.to_owned())
+            .on_press(Message::SetConfig(SetConfigFields::Blacklist(
+                Editable::Create("".to_string()),
+            )))
+            .into(),
     ])
     .spacing(10)
     .height(Length::Fill)
