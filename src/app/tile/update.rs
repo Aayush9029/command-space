@@ -328,9 +328,10 @@ pub fn handle_update(tile: &mut Tile, message: Message) -> Task<Message> {
             for _ in 0..amount {
                 let len = match tile.page {
                     Page::ClipboardHistory => tile.clipboard_content.len() as u32,
-                    Page::EmojiSearch => {
-                        tile.emoji_apps.search_prefix(&tile.query_lc).count() as u32
-                    } // or tile.results.len()
+                    Page::EmojiSearch => tile
+                        .emoji_apps
+                        .search_prefix(&tile.query_lc, Vec::new())
+                        .count() as u32, // or tile.results.len()
                     _ => tile.results.len() as u32,
                 };
 
@@ -932,6 +933,37 @@ pub fn handle_update(tile: &mut Tile, message: Message) -> Task<Message> {
                 SetConfigFields::Aliases(Editable::Update { old, new }) => {
                     final_config.aliases.remove(&old.0);
                     final_config.aliases.insert(new.0, new.1);
+                }
+                SetConfigFields::Blacklist(Editable::Create(item)) => {
+                    if !final_config.blacklist.contains(&item.to_lowercase()) {
+                        final_config.blacklist.push(item.to_lowercase());
+                    }
+                }
+                SetConfigFields::Blacklist(Editable::Delete(target)) => {
+                    final_config.blacklist = final_config
+                        .blacklist
+                        .iter()
+                        .filter_map(|item| {
+                            if &target != item {
+                                Some(item.to_lowercase())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                }
+                SetConfigFields::Blacklist(Editable::Update { old, new }) => {
+                    final_config.blacklist = final_config
+                        .blacklist
+                        .iter()
+                        .map(|item| {
+                            if item == &old {
+                                new.to_lowercase()
+                            } else {
+                                item.to_owned()
+                            }
+                        })
+                        .collect();
                 }
                 SetConfigFields::SearchDirs(Editable::Create(dir)) => {
                     if !final_config.search_dirs.contains(&dir) {

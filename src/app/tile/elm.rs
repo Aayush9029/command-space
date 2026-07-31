@@ -166,7 +166,7 @@ pub fn view(tile: &Tile, wid: window::Id) -> Element<'_, Message> {
             Page::EmojiSearch => emoji_page(
                 tile.config.theme.clone(),
                 tile.emoji_apps
-                    .search_prefix(&tile.query_lc)
+                    .search_prefix(&tile.query_lc, Vec::new())
                     .map(|x| x.to_owned())
                     .collect(),
                 tile.focus_id,

@@ -39,6 +39,7 @@ use url::Url;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::Duration;
 
 /// This is a wrapper around the sender to disable dropping
@@ -58,14 +59,23 @@ struct AppIndex {
 
 impl AppIndex {
     /// Search for an element in the index that starts with the provided prefix
-    fn search_prefix<'a>(&'a self, prefix: &'a str) -> impl ParallelIterator<Item = &'a App> + 'a {
+    fn search_prefix<'a>(
+        &'a self,
+        prefix: &'a str,
+        blacklist: Vec<String>,
+    ) -> impl ParallelIterator<Item = &'a App> + 'a {
         let pattern = Pattern::parse(prefix, CaseMatching::Ignore, Normalization::Smart);
+        let blacklist_rc = Arc::new(blacklist);
 
         self.by_name.par_iter().filter_map(move |(name, app)| {
             thread_local! {
                 static MATCHER: RefCell<Matcher> = RefCell::new(
                     Matcher::new(nucleo_matcher::Config::DEFAULT.match_paths())
                 );
+            }
+
+            if blacklist_rc.contains(&name.to_lowercase()) {
+                return None;
             }
 
             MATCHER.with(|m| {
@@ -405,7 +415,7 @@ impl Tile {
             &AppIndex::empty()
         };
         let results: Vec<App> = options
-            .search_prefix(&query)
+            .search_prefix(&query, self.config.blacklist.clone())
             .map(|x| x.to_owned())
             .collect();
 
@@ -704,15 +714,15 @@ mod tests {
         ]);
 
         let prefix_results: Vec<_> = index
-            .search_prefix("sa")
+            .search_prefix("sa", Vec::new())
             .map(|app| app.display_name.clone())
             .collect();
         let spaced_results: Vec<_> = index
-            .search_prefix("studio")
+            .search_prefix("studio", Vec::new())
             .map(|app| app.display_name.clone())
             .collect();
         let hyphen_results: Vec<_> = index
-            .search_prefix("desktop")
+            .search_prefix("desktop", Vec::new())
             .map(|app| app.display_name.clone())
             .collect();
 
