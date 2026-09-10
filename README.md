@@ -1,7 +1,13 @@
-# Command Space
+<h1 align="center">Command Space</h1>
 
-Your launcher for Omarchy.
+<p align="center">Your launcher for Omarchy.</p>
 
-[Download](https://github.com/Aayush9029/command-space/releases)
+<p align="center">
+  <a href="https://github.com/Aayush9029/command-space/releases">
+    <img src="https://img.shields.io/badge/Download_for_Omarchy-1a1b26?style=for-the-badge&amp;logo=linux&amp;logoColor=7aa2f7" alt="Download for Omarchy" />
+  </a>
+</p>
 
-![Command Space](docs/assets/window-commands.png)
+<p align="center">
+  <img src="docs/assets/window-commands.png" alt="Command Space showing window commands" width="760" />
+</p>
