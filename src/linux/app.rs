@@ -2750,10 +2750,14 @@ impl Launcher {
                 }
                 let body = row![
                     container(icon).center(28),
-                    widget::rich_text(label)
-                        .size(15)
-                        .wrapping(widget::text::Wrapping::None)
-                        .width(Fill),
+                    container(
+                        widget::rich_text(label)
+                            .size(15)
+                            .wrapping(widget::text::Wrapping::None)
+                            .width(Fill),
+                    )
+                    .width(Fill)
+                    .clip(true),
                     text(if favorite { "★" } else { "" })
                         .size(12)
                         .color(colors.muted),
@@ -2929,11 +2933,15 @@ impl Launcher {
                 ""
             };
             let footer = row![
-                text(status)
-                    .size(12)
-                    .color(colors.muted)
-                    .wrapping(widget::text::Wrapping::None)
-                    .width(Fill),
+                container(
+                    text(status)
+                        .size(12)
+                        .color(colors.muted)
+                        .wrapping(widget::text::Wrapping::None)
+                        .width(Fill),
+                )
+                .width(Fill)
+                .clip(true),
                 button(
                     row![
                         text(primary.to_owned()).size(13),
