@@ -479,6 +479,7 @@ dependencies = [
  "json5",
  "ksni",
  "nucleo-matcher",
+ "resvg",
  "rusqlite",
  "serde",
  "serde_json",

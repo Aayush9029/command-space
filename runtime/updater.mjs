@@ -4,7 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import {fileURLToPath} from "node:url";
 import {createHash} from "node:crypto";
-import {execFile} from "node:child_process";
+import {execFile, spawn} from "node:child_process";
 import {promisify} from "node:util";
 
 const run = promisify(execFile);
@@ -87,23 +87,69 @@ async function writeStatus(value) {
   await fs.rename(temporary,file);
 }
 
+export async function acquireUpdateLock(directory) {
+  await fs.mkdir(directory,{recursive:true,mode:0o700});
+  const lock = await fs.open(path.join(directory,"install.lock"),"a",0o600);
+  try {
+    await new Promise((resolve,reject) => {
+      // flock and Node share this open file description; closing Node's handle releases the lock, including after a crash.
+      const child = spawn("flock",["--nonblock","--conflict-exit-code","75","3"],{stdio:["ignore","ignore","pipe",lock.fd]});
+      let diagnostic = "";
+      child.stderr.setEncoding("utf8");
+      child.stderr.on("data", value => { diagnostic = (diagnostic + value).slice(-4096); });
+      child.once("error",reject);
+      child.once("exit",code => {
+        if (code === 0) resolve();
+        else reject(new Error(code === 75 ? "Another Command Space update is running" : `Could not lock the update: ${diagnostic.trim() || `flock exited ${code}`}`));
+      });
+    });
+    const legacy = path.join(directory,"lock");
+    let owner;
+    try { owner = JSON.parse(await fs.readFile(path.join(legacy,"owner.json"),"utf8")); }
+    catch (error) { if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error; }
+    if (Number.isSafeInteger(owner?.pid) && owner.pid > 0) {
+      try { process.kill(owner.pid,0); throw new Error("Another Command Space update is running"); }
+      catch (error) { if (error.code !== "ESRCH") throw error; }
+    } else {
+      const status = await fs.stat(legacy).catch(error => { if (error.code !== "ENOENT") throw error; });
+      if (status && Date.now() - status.mtimeMs < 30000) throw new Error("Another Command Space update is starting; retry in a moment");
+    }
+    return lock;
+  } catch (error) {
+    await lock.close();
+    throw error;
+  }
+}
+
+export async function backupInstallation(target, previous, packagePath) {
+  const locations = ["bin","runtime","bundled-extensions"];
+  for (const entry of await fs.readdir(path.join(packagePath,"extensions"),{withFileTypes:true})) {
+    if (!entry.isDirectory()) continue;
+    const manifest = JSON.parse(await fs.readFile(path.join(packagePath,"extensions",entry.name,"package.json"),"utf8"));
+    if (!/^[a-zA-Z0-9_-]+$/.test(manifest.name)) throw new Error("Release contains an invalid bundled extension ID");
+    locations.push(`extensions/${manifest.name}`);
+  }
+  await fs.rm(previous,{recursive:true,force:true});
+  await fs.mkdir(previous,{mode:0o700});
+  const snapshot = [];
+  for (const location of new Set(locations)) {
+    const existed = await fs.stat(path.join(target,location)).then(() => true,error => { if (error.code !== "ENOENT") throw error; return false; });
+    if (existed) await fs.cp(path.join(target,location),path.join(previous,location),{recursive:true});
+    snapshot.push({location,existed});
+  }
+  return snapshot;
+}
+
+export async function restoreInstallation(target, previous, snapshot) {
+  for (const {location,existed} of snapshot) {
+    await fs.rm(path.join(target,location),{recursive:true,force:true});
+    if (existed) await fs.cp(path.join(previous,location),path.join(target,location),{recursive:true});
+  }
+}
+
 export async function install(version, current, options = {}) {
   const directory = stateDirectory(), target = installDirectory();
-  await fs.mkdir(directory,{recursive:true,mode:0o700});
-  const lock = path.join(directory,"lock");
-  try { await fs.mkdir(lock); } catch (error) {
-    if (error.code !== "EEXIST") throw error;
-    let owner;
-    try { owner = JSON.parse(await fs.readFile(path.join(lock,"owner.json"),"utf8")); }
-    catch { throw new Error("Another Command Space update is starting"); }
-    try { process.kill(owner.pid,0); throw new Error("Another Command Space update is running"); }
-    catch (error) {
-      if (error.code !== "ESRCH") throw error;
-      await fs.rm(lock,{recursive:true,force:true});
-      await fs.mkdir(lock);
-    }
-  }
-  await fs.writeFile(path.join(lock,"owner.json"), JSON.stringify({pid:process.pid}), {mode:0o600});
+  const lock = await acquireUpdateLock(directory);
   let staging;
   try {
     await writeStatus({state:"downloading",version});
@@ -112,18 +158,13 @@ export async function install(version, current, options = {}) {
     staging = await fs.mkdtemp(path.join(directory,"staging-"));
     const packagePath = await prepare(release,staging);
     const previous = path.join(directory,"previous");
-    await fs.rm(previous,{recursive:true,force:true});
-    await fs.mkdir(previous,{mode:0o700});
-    for (const name of ["bin","runtime"]) await fs.cp(path.join(target,name),path.join(previous,name),{recursive:true});
+    const snapshot = await backupInstallation(target,previous,packagePath);
     await writeStatus({state:"installing",version});
     try {
       await run("bash",[path.join(packagePath,"scripts/install-linux.sh"),"--prebuilt"],{timeout:120000,maxBuffer:4*1024*1024});
     } catch (error) {
       await run("systemctl",["--user","stop","command-space.service"]).catch(() => {});
-      for (const name of ["bin","runtime"]) {
-        await fs.rm(path.join(target,name),{recursive:true,force:true});
-        await fs.cp(path.join(previous,name),path.join(target,name),{recursive:true});
-      }
+      await restoreInstallation(target,previous,snapshot);
       await run("systemctl",["--user","restart","command-space.service"]);
       throw new Error(`Update failed and the previous version was restored: ${error.message}`);
     }
@@ -134,8 +175,8 @@ export async function install(version, current, options = {}) {
     await run("notify-send",["--app-name=Command Space","Command Space update failed",error.message]).catch(() => {});
     throw error;
   } finally {
-    if (staging) await fs.rm(staging,{recursive:true,force:true});
-    await fs.rm(lock,{recursive:true,force:true});
+    try { if (staging) await fs.rm(staging,{recursive:true,force:true}); }
+    finally { await lock.close(); }
   }
 }
 

@@ -3,12 +3,14 @@ use iced::{Subscription, futures::SinkExt, stream};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
+    collections::HashMap,
     fs,
     io::{BufRead, Write},
+    os::unix::process::CommandExt,
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
-        OnceLock,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -28,6 +30,7 @@ pub struct Manifest {
 pub struct ExtensionCommand {
     pub name: String,
     pub title: String,
+    pub icon: Option<String>,
     pub description: Option<String>,
     pub mode: Option<String>,
     pub interval: Option<String>,
@@ -56,6 +59,34 @@ pub fn manifest(path: &Path) -> Result<Manifest, String> {
     Ok(manifest)
 }
 
+fn manifest_icon(folder: &Path, icon: Option<&str>) -> String {
+    let Some(icon) = icon else {
+        return "󰏗".into();
+    };
+    if icon.starts_with("icon:") || super::icons::is_symbol(icon) && !icon.contains('.') {
+        return icon.into();
+    }
+    let file = if Path::new(icon).is_absolute() {
+        PathBuf::from(icon)
+    } else {
+        folder.join("assets").join(icon)
+    };
+    let config = super::model::Config::load().unwrap_or_default();
+    let colors = super::appearance::Colors::configured(&config);
+    if colors.background.r + colors.background.g + colors.background.b < 1.5
+        && let (Some(stem), Some(extension)) = (
+            file.file_stem().and_then(|value| value.to_str()),
+            file.extension().and_then(|value| value.to_str()),
+        )
+    {
+        let dark = file.with_file_name(format!("{stem}@dark.{extension}"));
+        if dark.is_file() {
+            return dark.to_string_lossy().into_owned();
+        }
+    }
+    file.to_string_lossy().into_owned()
+}
+
 pub fn entries() -> Vec<Entry> {
     let mut entries = vec![];
     let Ok(folders) = fs::read_dir(root()) else {
@@ -81,18 +112,10 @@ pub fn entries() -> Vec<Entry> {
                     .as_str()
                     .map(|value| format!("{title} · {value}"))
                     .unwrap_or_else(|| title.into());
-                let icon = manifest
-                    .icon
-                    .as_ref()
-                    .map(|icon| {
-                        folder
-                            .path()
-                            .join("assets")
-                            .join(icon)
-                            .to_string_lossy()
-                            .into_owned()
-                    })
-                    .unwrap_or_else(|| "󰏗".into());
+                let icon = manifest_icon(
+                    &folder.path(),
+                    command.icon.as_deref().or(manifest.icon.as_deref()),
+                );
                 entries.push(Entry::new(
                     &format!("extension:{}:{}", manifest.name, command.name),
                     &command.title,
@@ -384,7 +407,7 @@ pub fn management_entries(route: &str) -> Vec<Entry> {
                 &format!("extension-manage:{}", m.name),
                 m.title.as_deref().unwrap_or(&m.name),
                 &format!("{} commands · Manage installation", m.commands.len()),
-                "󰏗",
+                &manifest_icon(&root().join(&m.name), m.icon.as_deref()),
                 Action::Builtin(format!("extension-manage:{}", m.name)),
             )
         }));
@@ -408,6 +431,8 @@ pub struct Session {
     pub mode: String,
     input: ChildStdin,
     process: Child,
+    invocation_groups: Arc<Mutex<HashMap<u32, String>>>,
+    output_reader: Option<std::thread::JoinHandle<()>>,
 }
 
 impl Session {
@@ -428,6 +453,26 @@ impl Session {
         context: &super::windows::Context,
         background: bool,
     ) -> Result<Self, String> {
+        Self::start_with_fallback(
+            extension,
+            command,
+            arguments,
+            launch_context,
+            context,
+            background,
+            None,
+        )
+    }
+
+    pub fn start_with_fallback(
+        extension: &str,
+        command: &str,
+        arguments: Value,
+        launch_context: Value,
+        context: &super::windows::Context,
+        background: bool,
+        fallback_text: Option<&str>,
+    ) -> Result<Self, String> {
         let definition = installed()
             .into_iter()
             .find(|m| m.name == extension)
@@ -447,6 +492,7 @@ impl Session {
             });
         let mut process = Command::new("node")
             .arg(runtime.join("host.mjs"))
+            .process_group(0)
             .env(
                 "COMMAND_SPACE_AI_CONFIG",
                 serde_json::to_string(&super::model::Config::load().unwrap_or_default().ai)
@@ -470,12 +516,35 @@ impl Session {
             .stdout
             .take()
             .ok_or("Extension stdout unavailable")?;
-        std::thread::spawn(move || {
+        let invocation_groups = Arc::new(Mutex::new(HashMap::new()));
+        let groups = invocation_groups.clone();
+        let output_reader = std::thread::spawn(move || {
             for line in std::io::BufReader::new(output).lines() {
                 let Ok(line) = line else {
                     break;
                 };
-                if let Ok(value) = serde_json::from_str(&line) {
+                if let Ok(value) = serde_json::from_str::<Value>(&line) {
+                    if value["type"] == "invocation-started" {
+                        if let Some(pid) = value["pid"]
+                            .as_u64()
+                            .and_then(|pid| u32::try_from(pid).ok())
+                            && let Some(start) = process_start(pid)
+                            && let Ok(mut groups) = groups.lock()
+                        {
+                            groups.insert(pid, start);
+                        }
+                        continue;
+                    }
+                    if value["type"] == "invocation-ended" {
+                        if let Some(pid) = value["pid"]
+                            .as_u64()
+                            .and_then(|pid| u32::try_from(pid).ok())
+                            && let Ok(mut groups) = groups.lock()
+                        {
+                            groups.remove(&pid);
+                        }
+                        continue;
+                    }
                     let _ = events().send((id, value));
                 }
             }
@@ -488,16 +557,36 @@ impl Session {
             extension: extension.into(),
             command: command.into(),
             mode: definition.mode.unwrap_or_else(|| "view".into()),
+            invocation_groups,
+            output_reader: Some(output_reader),
         };
-        let mut message = json!({"type":"launch","extension":root().join(extension),"command":command,"launchType":if background { "background" } else { "userInitiated" }});
+        session.launch(arguments, launch_context, background, fallback_text)?;
+        Ok(session)
+    }
+
+    pub fn launch(
+        &mut self,
+        arguments: Value,
+        launch_context: Value,
+        background: bool,
+        fallback_text: Option<&str>,
+    ) -> Result<(), String> {
+        let mut message = json!({"type":"launch","extension":root().join(&self.extension),"command":self.command,"launchType":if background { "background" } else { "userInitiated" }});
         if !arguments.is_null() {
             message["arguments"] = arguments;
         }
         if !launch_context.is_null() {
             message["launchContext"] = launch_context;
         }
-        session.send(message)?;
-        Ok(session)
+        if let Some(text) = fallback_text {
+            message["fallbackText"] = json!(text);
+        }
+        self.send(message)
+    }
+
+    pub fn refresh(&mut self, background: bool) -> Result<(), String> {
+        self.send(json!({"type":"launch","extension":root().join(&self.extension),"command":self.command,
+            "launchType":if background { "background" } else { "userInitiated" },"scheduled":background}))
     }
 
     pub fn send(&mut self, message: Value) -> Result<(), String> {
@@ -507,9 +596,38 @@ impl Session {
 
 impl Drop for Session {
     fn drop(&mut self) {
+        let _ = Command::new("/usr/bin/kill")
+            .args(["-KILL", "--", &format!("-{}", self.process.id())])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
         let _ = self.process.kill();
         let _ = self.process.wait();
+        if let Some(reader) = self.output_reader.take() {
+            let _ = reader.join();
+        }
+        if let Ok(groups) = self.invocation_groups.lock() {
+            for (pid, start) in groups.iter() {
+                if process_start(*pid).as_ref() == Some(start) {
+                    let _ = Command::new("/usr/bin/kill")
+                        .args(["-KILL", "--", &format!("-{pid}")])
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status();
+                }
+            }
+        }
     }
+}
+
+fn process_start(pid: u32) -> Option<String> {
+    fs::read_to_string(format!("/proc/{pid}/stat"))
+        .ok()?
+        .rsplit_once(") ")?
+        .1
+        .split_whitespace()
+        .nth(19)
+        .map(String::from)
 }
 
 pub fn subscription() -> Subscription<super::app::Message> {
@@ -561,5 +679,79 @@ impl Node {
         std::iter::once(self)
             .chain(self.children.iter().flat_map(|n| n.descendants()))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn closing_extension_session_terminates_its_subprocesses() {
+        let mut process = Command::new("sh")
+            .args(["-c", "sleep 60 & printf '%s\\n' \"$!\"; wait"])
+            .process_group(0)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let output = process.stdout.take().unwrap();
+        let mut line = String::new();
+        std::io::BufReader::new(output)
+            .read_line(&mut line)
+            .unwrap();
+        let child: u32 = line.trim().parse().unwrap();
+        let mut invocation = Command::new("sh")
+            .args(["-c", "sleep 60 & printf '%s\\n' \"$!\"; wait"])
+            .process_group(0)
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut invocation_line = String::new();
+        std::io::BufReader::new(invocation.stdout.take().unwrap())
+            .read_line(&mut invocation_line)
+            .unwrap();
+        let invocation_child: u32 = invocation_line.trim().parse().unwrap();
+        let groups = HashMap::from([(invocation.id(), process_start(invocation.id()).unwrap())]);
+        let session = Session {
+            id: 0,
+            extension: "fixture".into(),
+            command: "subprocess".into(),
+            mode: "no-view".into(),
+            input: process.stdin.take().unwrap(),
+            process,
+            invocation_groups: Arc::new(Mutex::new(groups)),
+            output_reader: None,
+        };
+        assert!(fs::metadata(format!("/proc/{child}")).is_ok());
+        drop(session);
+        for _ in 0..100 {
+            let stopped = [child, invocation_child].into_iter().all(|pid| {
+                fs::read_to_string(format!("/proc/{pid}/stat"))
+                    .as_ref()
+                    .map_or(true, |value| {
+                        value
+                            .split(')')
+                            .nth(1)
+                            .unwrap_or_default()
+                            .trim_start()
+                            .starts_with('Z')
+                    })
+            });
+            if stopped && invocation.try_wait().unwrap().is_some() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let _ = Command::new("/usr/bin/kill")
+            .args([
+                "-KILL",
+                "--",
+                &child.to_string(),
+                &format!("-{}", invocation.id()),
+            ])
+            .status();
+        let _ = invocation.wait();
+        panic!("The extension subprocess was left running");
     }
 }

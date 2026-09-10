@@ -43,7 +43,7 @@ export class PKCEClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(new Error("Authorization timed out. Please try again.")), 10 * 60 * 1000);
     const pending = bridge().request("oauth", { state, provider:this.options.providerName }, controller.signal);
-    const browser = spawn("xdg-open", [url], { stdio:"ignore" });
+    const browser = spawn("xdg-open", [url], { detached:true, stdio:"ignore" });
     browser.on("error", error => controller.abort(new Error(`Opening authorization page: ${error.message}`)));
     browser.on("exit", code => { if (code) controller.abort(new Error("Could not open the authorization page")); });
     let callback;

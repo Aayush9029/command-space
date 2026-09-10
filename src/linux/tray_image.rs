@@ -49,24 +49,31 @@ struct Renderer {
 }
 
 pub fn render(value: &Value) -> Option<TrayImage> {
-    let source = value.as_str().or_else(|| value["source"].as_str())?;
+    render_source(value).or_else(|| value.get("fallback").and_then(render))
+}
+
+fn render_source(value: &Value) -> Option<TrayImage> {
+    let source = value.as_str().or_else(|| value["source"].as_str());
+    let source = source
+        .map(str::to_owned)
+        .or_else(|| value["fileIcon"].as_str().map(super::icons::file_icon))?;
+    let symbolic = source.starts_with("icon:") || source.ends_with("-symbolic.svg");
+    let source = if source.starts_with("icon:") {
+        super::icons::builtin(&source)?
+    } else {
+        source
+    };
     if source.is_empty() {
         return None;
     }
-    let color = match value["tintColor"].as_str().unwrap_or_default() {
-        "red" => iced::Color::from_rgb8(247, 118, 142),
-        "green" => iced::Color::from_rgb8(158, 206, 106),
-        "yellow" => iced::Color::from_rgb8(224, 175, 104),
-        "orange" => iced::Color::from_rgb8(255, 158, 100),
-        "purple" | "magenta" => iced::Color::from_rgb8(187, 154, 247),
-        "secondarytext" => super::appearance::Colors::load().muted,
-        custom if custom.starts_with('#') => custom.parse().unwrap_or(iced::Color::WHITE),
-        _ => super::appearance::Colors::load().foreground,
-    };
-    let modified = std::fs::metadata(source)
+    let colors = super::appearance::Colors::load();
+    let tint = super::extension_image::color(&value["tintColor"], colors)
+        .or_else(|| symbolic.then_some(colors.foreground));
+    let color = tint.unwrap_or(colors.foreground);
+    let modified = std::fs::metadata(&source)
         .ok()
         .and_then(|metadata| metadata.modified().ok());
-    let key = format!("{value}/{color:?}/{modified:?}");
+    let key = format!("{value}/{source}/{color:?}/{modified:?}");
     static RENDERER: OnceLock<Mutex<Renderer>> = OnceLock::new();
     let mut renderer = RENDERER
         .get_or_init(|| {
@@ -82,19 +89,12 @@ pub fn render(value: &Value) -> Option<TrayImage> {
         return Some(image.clone());
     }
     let image = if source.starts_with('/') {
-        if std::fs::metadata(source).ok()?.len() > 16 * 1024 * 1024 {
+        if std::fs::metadata(&source).ok()?.len() > 16 * 1024 * 1024 {
             return None;
         }
-        let mut reader = image::ImageReader::open(source)
-            .ok()?
-            .with_guessed_format()
-            .ok()?;
-        let mut limits = image::Limits::default();
-        limits.max_image_width = Some(4096);
-        limits.max_image_height = Some(4096);
-        limits.max_alloc = Some(64 * 1024 * 1024);
-        reader.limits(limits);
-        let image = reader.decode().ok()?.thumbnail(SIZE, SIZE).to_rgba8();
+        let mut image = super::extension_image::raster(&source)?;
+        super::extension_image::apply_style(&mut image, tint, value["mask"].as_str().unwrap_or(""));
+        let image = image::imageops::thumbnail(&image, SIZE, SIZE);
         let mut canvas = RgbaImage::new(SIZE, SIZE);
         image::imageops::overlay(
             &mut canvas,
@@ -106,7 +106,7 @@ pub fn render(value: &Value) -> Option<TrayImage> {
             rgba: canvas.into_raw(),
         }
     } else {
-        if source.chars().count() > 16 {
+        if !super::icons::is_symbol(&source) {
             return None;
         }
         let Renderer { fonts, swash, .. } = &mut *renderer;
@@ -114,8 +114,11 @@ pub fn render(value: &Value) -> Option<TrayImage> {
         buffer.set_size(fonts, Some(SIZE as f32), Some(SIZE as f32));
         buffer.set_text(
             fonts,
-            source,
-            &Attrs::new().family(Family::Name("JetBrainsMono Nerd Font")),
+            &source,
+            &Attrs::new().family(match super::icons::font("", &source).family {
+                iced::font::Family::Name(name) => Family::Name(name),
+                _ => Family::SansSerif,
+            }),
             Shaping::Advanced,
             Some(Align::Center),
         );
@@ -148,6 +151,34 @@ pub fn render(value: &Value) -> Option<TrayImage> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unreadable_tray_images_use_the_supplied_fallback() {
+        let folder = tempfile::tempdir().unwrap();
+        let file = folder.path().join("icon.svg");
+        std::fs::write(&file, "invalid SVG").unwrap();
+        let icon = render(&serde_json::json!({"source":file,"fallback":"icon:Heart"})).unwrap();
+        assert!(
+            image::load_from_memory(&icon.png())
+                .unwrap()
+                .to_rgba8()
+                .pixels()
+                .any(|pixel| pixel[3] > 0)
+        );
+    }
+
+    #[test]
+    fn svg_tray_icons_render_with_tint_and_masks() {
+        let folder = tempfile::tempdir().unwrap();
+        let file = folder.path().join("icon.svg");
+        std::fs::write(&file, r#"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="M0 0h32v32H0z"/></svg>"#).unwrap();
+        let icon =
+            render(&serde_json::json!({"source":file,"tintColor":"red","mask":"circle"})).unwrap();
+        let pixels = image::load_from_memory(&icon.png()).unwrap().to_rgba8();
+        assert_eq!(pixels.get_pixel(0, 0)[3], 0);
+        assert_eq!(&pixels.get_pixel(24, 24).0[..3], &[247, 118, 142]);
+    }
+
     #[test]
     fn png_tray_images_preserve_color_and_use_status_notifier_argb() {
         let folder = tempfile::tempdir().unwrap();

@@ -23,10 +23,10 @@ impl Colors {
             colors.accent = Color::from_rgb8(44, 85, 150);
             colors.muted = Color::from_rgb8(104, 114, 129);
         } else if config.theme == "dark" {
-            colors.background = Color::from_rgb8(24, 26, 31);
-            colors.foreground = Color::from_rgb8(224, 226, 231);
-            colors.selection = Color::from_rgb8(43, 49, 61);
-            colors.muted = Color::from_rgb8(135, 143, 157);
+            colors.background = Color::from_rgb8(23, 23, 23);
+            colors.foreground = Color::from_rgb8(238, 238, 238);
+            colors.selection = Color::from_rgb8(42, 42, 42);
+            colors.muted = Color::from_rgb8(160, 160, 160);
         }
         for (value, target) in [
             (&config.background, &mut colors.background),
@@ -82,8 +82,8 @@ impl Colors {
             background: Some(Background::Color(self.background)),
             text_color: Some(self.foreground),
             border: Border {
-                color: self.accent,
-                width: 2.0,
+                color: self.border(),
+                width: 1.0,
                 radius: 0.0.into(),
             },
             ..Default::default()
@@ -98,12 +98,11 @@ impl Colors {
             } else {
                 self.background
             })),
-            text_color: if selected {
-                self.accent
-            } else {
-                self.foreground
+            text_color: self.foreground,
+            border: Border {
+                radius: 3.0.into(),
+                ..Default::default()
             },
-            border: Border::default(),
             ..Default::default()
         }
     }
@@ -116,6 +115,23 @@ impl Colors {
             placeholder: self.muted,
             value: self.foreground,
             selection: self.selection,
+        }
+    }
+
+    pub fn border(&self) -> Color {
+        Color::from_rgb(
+            self.background.r * 0.85 + self.foreground.r * 0.15,
+            self.background.g * 0.85 + self.foreground.g * 0.15,
+            self.background.b * 0.85 + self.foreground.b * 0.15,
+        )
+    }
+
+    pub fn divider(&self) -> iced::widget::rule::Style {
+        iced::widget::rule::Style {
+            color: self.border(),
+            radius: 0.into(),
+            fill_mode: iced::widget::rule::FillMode::Full,
+            snap: true,
         }
     }
 }

@@ -96,7 +96,7 @@ impl Catalog {
                     )
                 })
                 .collect(),
-            "files" => dynamic.to_vec(),
+            "files" => vec![],
             "extensions" => {
                 let mut entries = self.extension_management.clone();
                 entries.extend(self.extensions.clone());
@@ -136,6 +136,7 @@ impl Catalog {
                 all.extend(self.apps.clone());
                 all.extend(self.extensions.clone());
                 all.extend(builtins());
+                all.extend(super::windows::entries());
                 all.retain(|e| {
                     self.ranks.get(&e.id).is_some_and(|(uses, favorite)| {
                         if route == "favorites" {
@@ -149,7 +150,6 @@ impl Catalog {
             }
             _ => {
                 let mut entries = self.menu.entries(route, !expanded.is_empty());
-                entries.extend(dynamic.iter().cloned());
                 if route == "root" {
                     if !expanded.is_empty() {
                         entries.extend(self.apps.clone());
@@ -189,9 +189,32 @@ impl Catalog {
                 .any(|b| b == &e.id || b.eq_ignore_ascii_case(&e.title))
         });
         let pattern = Pattern::parse(expanded, CaseMatching::Ignore, Normalization::Smart);
+        let expanded_lower = expanded.to_lowercase();
         let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
+        let mut buffer = Vec::new();
+        let mut haystack = String::new();
+        let dynamic = if matches!(
+            route,
+            "clipboard"
+                | "emoji"
+                | "extensions"
+                | "apps"
+                | "windows"
+                | "settings"
+                | "favorites"
+                | "recent"
+        ) {
+            &[]
+        } else {
+            dynamic
+        };
         let mut scored = entries
-            .into_iter()
+            .iter()
+            .chain(dynamic.iter().filter(|entry| {
+                !config.blacklist.iter().any(|blocked| {
+                    blocked == &entry.id || blocked.eq_ignore_ascii_case(&entry.title)
+                })
+            }))
             .enumerate()
             .filter_map(|(order, entry)| {
                 let contents = if route == "clipboard" {
@@ -202,14 +225,19 @@ impl Catalog {
                 } else {
                     ""
                 };
-                let haystack = format!(
-                    "{} {} {} {}",
-                    entry.title, entry.subtitle, entry.keywords, contents
-                );
-                let mut buffer = Vec::new();
                 let score = if expanded.is_empty() {
                     Some(0)
                 } else {
+                    haystack.clear();
+                    for value in [
+                        entry.title.as_str(),
+                        entry.subtitle.as_str(),
+                        entry.keywords.as_str(),
+                        contents,
+                    ] {
+                        haystack.push_str(value);
+                        haystack.push(' ');
+                    }
                     pattern.score(Utf32Str::new(&haystack, &mut buffer), &mut matcher)
                 }?;
                 let (uses, favorite) = self.ranks.get(&entry.id).copied().unwrap_or_default();
@@ -217,10 +245,7 @@ impl Catalog {
                     if !expanded.is_empty() && entry.title.eq_ignore_ascii_case(expanded) {
                         1000
                     } else if !expanded.is_empty()
-                        && entry
-                            .title
-                            .to_lowercase()
-                            .starts_with(&expanded.to_lowercase())
+                        && entry.title.to_lowercase().starts_with(&expanded_lower)
                     {
                         100
                     } else {
@@ -233,11 +258,35 @@ impl Catalog {
                 ))
             })
             .collect::<Vec<_>>();
-        scored.sort_by(|a, b| b.1.cmp(&a.1).then(a.2.cmp(&b.2)));
+        let compare =
+            |a: &(&Entry, i64, usize), b: &(&Entry, i64, usize)| b.1.cmp(&a.1).then(a.2.cmp(&b.2));
+        if route == "root" && !expanded.is_empty() {
+            let mut targets = HashMap::new();
+            let mut unique: Vec<(&Entry, i64, usize)> = Vec::with_capacity(scored.len());
+            for candidate in scored {
+                if let Action::Extension { extension, command } = &candidate.0.action {
+                    let key = (extension.as_str(), command.as_str());
+                    if let Some(&index) = targets.get(&key) {
+                        if compare(&candidate, &unique[index]).is_lt() {
+                            unique[index] = candidate;
+                        }
+                        continue;
+                    }
+                    targets.insert(key, unique.len());
+                }
+                unique.push(candidate);
+            }
+            scored = unique;
+        }
+        if scored.len() > config.max_results {
+            scored.select_nth_unstable_by(config.max_results, compare);
+            scored.truncate(config.max_results);
+        }
+        scored.sort_by(compare);
         let mut results: Vec<_> = scored
             .into_iter()
             .take(config.max_results)
-            .map(|(e, _, _)| e)
+            .map(|(e, _, _)| e.clone())
             .collect();
         if route == "root" && !expanded.is_empty() {
             let mut quick = quick_results(expanded, config);
@@ -266,23 +315,18 @@ pub fn builtins() -> Vec<Entry> {
         (
             "extensions",
             "Extensions",
-            "Installed TypeScript, JavaScript, and shell commands",
+            "Browse and manage extensions",
             "󰏗",
         ),
         ("favorites", "Favorites", "Your pinned commands", ""),
         (
             "updates",
-            "Check for Command Space Updates",
+            "Check for Updates",
             "Download new Linux releases",
             "",
         ),
         ("recent", "Frequently Used", "Commands ranked by use", "󰥔"),
-        (
-            "settings",
-            "Command Space Settings",
-            "Configure your launcher",
-            "",
-        ),
+        ("settings", "Settings", "Configure your launcher", ""),
         (
             "packages",
             "Installed Packages",
@@ -618,4 +662,104 @@ fn database() -> rusqlite::Result<Connection> {
     let connection = Connection::open(state_dir().join("history.db"))?;
     connection.execute_batch("CREATE TABLE IF NOT EXISTS ranking(id TEXT PRIMARY KEY, uses INTEGER NOT NULL DEFAULT 0, favorite INTEGER NOT NULL DEFAULT 0)")?;
     Ok(connection)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn root_search_keeps_the_best_match_for_each_extension_command() {
+        let entry = |id: &str, title: &str, command: &str| {
+            Entry::new(
+                id,
+                title,
+                "",
+                "",
+                Action::Extension {
+                    extension: "fixture".into(),
+                    command: command.into(),
+                },
+            )
+        };
+        let catalog = Catalog {
+            extensions: vec![
+                entry("native", "Unique workflow settings", "first"),
+                entry("extension", "Unique workflow", "first"),
+                entry("second", "Unique workflow tool", "second"),
+            ],
+            ..Default::default()
+        };
+        let config = Config {
+            max_results: 2,
+            ..Default::default()
+        };
+        let results = catalog.search("root", "Unique workflow", &config, &[]);
+        assert_eq!(
+            results
+                .iter()
+                .map(|entry| entry.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["extension", "second"]
+        );
+    }
+
+    #[test]
+    fn favorite_and_recent_window_commands_remain_available() {
+        let target = super::super::windows::entries().into_iter().find(|entry| {
+            matches!(&entry.action, Action::Window { operation, .. } if operation == "left-half")
+        }).unwrap();
+        let mut catalog = Catalog::default();
+        catalog.ranks.insert(target.id.clone(), (2, true));
+        for route in ["favorites", "recent"] {
+            let results = catalog.search(route, "", &Config::default(), &[]);
+            assert!(results.iter().any(|entry| entry.id == target.id));
+        }
+    }
+
+    #[test]
+    fn dynamic_search_limits_keep_ranked_order_and_blacklists() {
+        let dynamic = (0..200)
+            .map(|index| {
+                let name = format!("tool-{index:03}");
+                Entry::new(&name, &name, "Package", "", Action::Copy(name.clone()))
+            })
+            .collect::<Vec<_>>();
+        let mut catalog = Catalog::default();
+        catalog.ranks.insert("tool-190".into(), (0, true));
+        let config = Config {
+            max_results: 3,
+            blacklist: vec!["tool-000".into()],
+            ..Default::default()
+        };
+        let result = catalog.search("install.aur", "tool", &config, &dynamic);
+        assert_eq!(
+            result
+                .iter()
+                .map(|entry| entry.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["tool-190", "tool-001", "tool-002"]
+        );
+        let result = catalog.search("install.aur", "tool-042", &config, &dynamic);
+        assert_eq!(result[0].id, "tool-042");
+        assert!(catalog.search("apps", "tool", &config, &dynamic).is_empty());
+    }
+
+    #[test]
+    #[ignore = "Profiles the installed AUR catalog"]
+    fn aur_catalog_search_profile() {
+        let menu = Menu::load().unwrap();
+        let dynamic = menu.provider("install.aur");
+        assert!(dynamic.len() > 100_000);
+        let catalog = Catalog::default();
+        let config = Config::default();
+        let mut samples = Vec::new();
+        for query in ["", "rust", "firefox", "zellij", "python"] {
+            let started = std::time::Instant::now();
+            let result = catalog.search("install.aur", query, &config, &dynamic);
+            assert!(!result.is_empty());
+            samples.push((query, started.elapsed().as_secs_f64() * 1000.));
+        }
+        println!("AUR entries={}, search_ms={samples:?}", dynamic.len());
+    }
 }

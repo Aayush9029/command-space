@@ -1,0 +1,32 @@
+{
+  "name": "omarchy-tools",
+  "icon": "icon:AppWindowGrid3x3",
+  "title": "Omarchy",
+  "description": "Native forms for Omarchy desktop workflows",
+  "commands": [
+    { "name": "move-window", "icon": "icon:Move", "title": "Move Window", "mode": "view" },
+    { "name": "resize-window", "icon": "icon:ArrowsExpand", "title": "Resize Window", "mode": "view" },
+    { "name": "install-web-app", "icon": "icon:Globe", "title": "Install Web App", "mode": "view" },
+    { "name": "install-tui", "icon": "icon:Terminal", "title": "Install TUI", "mode": "view" },
+    { "name": "reminder", "icon": "icon:Alarm", "title": "Set Reminder", "mode": "view" },
+    { "name": "reminders", "icon": "icon:List", "title": "Show Reminders", "mode": "view" },
+    { "name": "clear-reminders", "icon": "icon:Trash", "title": "Clear Reminders", "mode": "no-view" },
+    { "name": "transcode", "icon": "icon:FilmStrip", "title": "Transcode Media", "mode": "view" },
+    { "name": "share-files", "icon": "icon:Upload", "title": "Share Files", "mode": "view" },
+    { "name": "share-folder", "icon": "icon:Folder", "title": "Share Folder", "mode": "view" },
+    { "name": "about-image", "icon": "icon:Image", "title": "Set About Image", "mode": "view" },
+    { "name": "screensaver-image", "icon": "icon:Desktop", "title": "Set Screensaver Image", "mode": "view" },
+    { "name": "install-wallpaper", "icon": "icon:Mountain", "title": "Install Wallpaper", "mode": "view" },
+    { "name": "install-theme", "icon": "icon:Swatch", "title": "Install Theme", "mode": "view" },
+    { "name": "add-shell-plugin", "icon": "icon:Plug", "title": "Add Shell Plugin", "mode": "view" },
+    { "name": "install-retro-game", "icon": "icon:GameController", "title": "Install Retro Game", "mode": "view" },
+    { "name": "custom-dns", "icon": "icon:Network", "title": "Configure Custom DNS", "mode": "view" },
+    { "name": "setup-sshd", "icon": "icon:Key", "title": "Set Up SSH Access", "mode": "view" },
+    { "name": "install-windows", "icon": "icon:AppWindow", "title": "Install Windows VM", "mode": "view" },
+    { "name": "drive-password", "icon": "icon:Lock", "title": "Change Drive Passphrase", "mode": "view" },
+    { "name": "about-text", "icon": "icon:Text", "title": "Edit About Text", "mode": "view" },
+    { "name": "screensaver-text", "icon": "icon:TextCursor", "title": "Edit Screensaver Text", "mode": "view" },
+    { "name": "about-reset", "icon": "icon:ArrowCounterClockwise", "title": "Reset About Branding", "mode": "no-view" },
+    { "name": "screensaver-reset", "icon": "icon:ArrowClockwise", "title": "Reset Screensaver Branding", "mode": "no-view" }
+  ]
+}

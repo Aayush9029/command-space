@@ -1,4 +1,7 @@
-use super::model::{Config, config_dir, data_dir, home, shell_quote, state_dir};
+use super::{
+    menu::Menu,
+    model::{Config, config_dir, data_dir, home, shell_quote, state_dir},
+};
 use std::{collections::HashSet, fs, process::Command};
 
 fn quoted(value: &str) -> String {
@@ -64,23 +67,59 @@ pub fn bindings(config: &Config) -> Result<String, String> {
     let root = std::env::var("OMARCHY_PATH").unwrap_or_else(|_| "/usr/share/omarchy".into());
     let defaults = fs::read_to_string(format!("{root}/default/hypr/bindings/utilities.lua"))
         .unwrap_or_default();
-    for line in defaults
-        .lines()
-        .filter(|line| line.starts_with("o.bind(\"") && line.contains("omarchy-menu toggle"))
-    {
-        let Some(key) = line
-            .strip_prefix("o.bind(\"")
-            .and_then(|s| s.split('"').next())
-        else {
+    let menu = Menu::load().unwrap_or_default();
+    for line in defaults.lines() {
+        let Some((key, title, command, suffix)) = binding_parts(line) else {
             continue;
         };
-        if key == "SUPER + SPACE" || keys.contains(&key.replace(' ', "").to_uppercase()) {
+        if keys.contains(&key.replace(' ', "").to_uppercase()) {
             continue;
         }
-        let line = line.replace("omarchy-menu toggle", &format!("{binary} toggle"));
-        output.push_str(&format!("hl.unbind({}); {line}\n", quoted(key)));
+        if let Some(command) = native_command(&command, &binary, &menu) {
+            output.push_str(&format!(
+                "hl.unbind({}); o.bind({}, {}, {}{suffix}\n",
+                quoted(&key),
+                quoted(&key),
+                quoted(&title),
+                quoted(&command)
+            ));
+        }
     }
     Ok(output)
+}
+
+fn binding_parts(line: &str) -> Option<(String, String, String, &str)> {
+    let mut rest = line.trim_start().strip_prefix("o.bind(")?;
+    let mut fields = Vec::new();
+    for index in 0..3 {
+        rest = rest.trim_start();
+        let mut parser = serde_json::Deserializer::from_str(rest).into_iter::<String>();
+        fields.push(parser.next()?.ok()?);
+        rest = &rest[parser.byte_offset()..];
+        if index < 2 {
+            rest = rest.trim_start().strip_prefix(',')?;
+        }
+    }
+    Some((fields.remove(0), fields.remove(0), fields.remove(0), rest))
+}
+
+fn native_command(command: &str, binary: &str, menu: &Menu) -> Option<String> {
+    if command.contains("omarchy-menu toggle") {
+        return Some(command.replace("omarchy-menu toggle", &format!("{binary} toggle")));
+    }
+    let builtin = match command {
+        "omarchy-shell shell toggle omarchy.emojis" | "omarchy-menu-emoji" => Some("emoji"),
+        "omarchy-shell shell toggle omarchy.clipboard" => Some("clipboard"),
+        "omacalc" => Some("root"),
+        _ => None,
+    };
+    if let Some(route) = builtin {
+        return Some(format!("{binary} toggle builtin:{route}"));
+    }
+    menu.items
+        .iter()
+        .find(|item| item.action == command && menu.native_action(&item.id).is_some())
+        .map(|item| format!("{binary} show {}", shell_quote(&item.id)))
 }
 
 pub fn apply(config: &Config) -> Result<(), String> {
@@ -308,5 +347,38 @@ mod tests {
         assert!(bindings(&config).unwrap_err().contains("more than once"));
         config.clipboard_hotkey = "SUPER + '\"".into();
         assert!(bindings(&config).unwrap_err().contains("Invalid shortcut"));
+    }
+
+    #[test]
+    fn native_shortcuts_keep_binding_options_and_conditional_commands() {
+        let binding = r#"o.bind("XF86PowerOff", "Power menu", "omarchy-menu toggle system", { locked = true })"#;
+        let (key, title, command, suffix) = binding_parts(binding).unwrap();
+        assert_eq!(key, "XF86PowerOff");
+        assert_eq!(title, "Power menu");
+        assert_eq!(suffix, ", { locked = true })");
+        assert_eq!(
+            native_command(&command, "launcher", &Menu::default()).unwrap(),
+            "launcher toggle system"
+        );
+        assert_eq!(
+            native_command(
+                "omarchy-capture-screenrecording --stop-recording || omarchy-menu toggle capture",
+                "launcher",
+                &Menu::default()
+            )
+            .unwrap(),
+            "omarchy-capture-screenrecording --stop-recording || launcher toggle capture"
+        );
+        let mut menu = Menu::default();
+        menu.merge(r#"{"learn.keys":{"action":"omarchy-menu-keybindings"},"trigger.reminder.show":{"action":"omarchy-reminder show"}}"#).unwrap();
+        assert_eq!(
+            native_command("omarchy-menu-keybindings", "launcher", &menu).unwrap(),
+            "launcher show 'learn.keys'"
+        );
+        assert_eq!(
+            native_command("omarchy-reminder show", "launcher", &menu).unwrap(),
+            "launcher show 'trigger.reminder.show'"
+        );
+        assert!(native_command("custom-command", "launcher", &menu).is_none());
     }
 }

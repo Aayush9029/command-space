@@ -8,6 +8,9 @@ use std::{
     process::Command,
 };
 
+mod native;
+pub mod packages;
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MenuItem {
@@ -134,6 +137,9 @@ impl Menu {
     }
 
     pub fn resolve(&self, route: &str) -> String {
+        if route.starts_with("native-confirm:") {
+            return route.into();
+        }
         let route = route.to_lowercase().replace('_', "-");
         if matches!(route.as_str(), "" | "go" | "menu") {
             return "root".into();
@@ -149,7 +155,9 @@ impl Menu {
                 })
             })
             .map_or(route, |item| {
-                if item.target.is_empty() {
+                if matches!(native::action(item), Some(Action::Builtin(ref name)) if name == "emoji") {
+                    "emoji".into()
+                } else if item.target.is_empty() {
                     item.id.clone()
                 } else {
                     item.target.clone()
@@ -158,6 +166,9 @@ impl Menu {
     }
 
     pub fn title(&self, route: &str) -> String {
+        if let Some(title) = native::title(route) {
+            return title;
+        }
         if route == "root" {
             return "Command Space".into();
         }
@@ -171,6 +182,20 @@ impl Menu {
                 }
             },
         )
+    }
+
+    pub fn native_action(&self, route: &str) -> Option<Action> {
+        self.items
+            .iter()
+            .find(|item| item.id == route)
+            .and_then(native::action)
+    }
+
+    pub fn package_operation(&self, route: &str) -> Option<packages::Operation> {
+        self.items
+            .iter()
+            .find(|item| item.id == route)
+            .and_then(|item| native::package_operation(&item.action))
     }
 
     pub fn breadcrumb(&self, item: &MenuItem) -> String {
@@ -226,7 +251,12 @@ impl Menu {
                     && self.visible(&item.id, &mut HashSet::new())
             })
             .map(|item| {
-                let action = if !item.action.is_empty() {
+                let action = if let Some(action) = native::action(item) {
+                    match action {
+                        Action::Menu(route) => Action::Menu(self.resolve(&route)),
+                        action => action,
+                    }
+                } else if !item.action.is_empty() {
                     Action::Shell(item.action.clone())
                 } else {
                     Action::Menu(if item.target.is_empty() {
@@ -272,9 +302,15 @@ impl Menu {
     }
 
     pub fn provider(&self, route: &str) -> Vec<Entry> {
+        if let Some(entries) = native::provider(self, route) {
+            return entries;
+        }
         let Some(item) = self.items.iter().find(|e| e.id == route) else {
             return vec![];
         };
+        if item.provider == "apps" {
+            return super::desktop::apps();
+        }
         let (list, current, action) = match item.provider.as_str() {
             "fonts" => (
                 "omarchy-font-list",

@@ -1,0 +1,146 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import readline from "node:readline";
+
+const extension = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const runtime = path.resolve(extension, "../../runtime/host.mjs");
+const nodes = tree => tree.flatMap(node => [node, ...nodes(node.children || [])]);
+
+async function fixture(t, command) {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), "command-space-workflow-host-"));
+  await fs.mkdir(path.join(home, "bin"));
+  for (const command of ["omarchy-webapp-install", "omarchy-tui-install", "omarchy-reminder", "omarchy-menu-share", "omarchy-transcode", "omarchy-transcode-ascii", "omarchy-theme-bg-set", "omarchy-games-retro-cores", "omarchy-games-retro-install", "omarchy-theme-install", "omarchy-git-url-check", "omarchy-plugin-add", "omarchy-plugin-catalog", "omarchy-plugin-enable", "omarchy-dns", "systemd-run"]) {
+    const source = `#!${process.execPath}\nconst fs=require('node:fs');const path=require('node:path');const command=path.basename(process.argv[1]);fs.appendFileSync(path.join(process.env.HOME,'calls.jsonl'),JSON.stringify([command,process.argv.slice(2)])+'\\n');if(process.argv[2]==='show') console.log(JSON.stringify({reminders:[]}));if(command==='omarchy-games-retro-cores') console.log('Nintendo SNES / SFC (snes9x)');if(command==='omarchy-plugin-add') console.log('Added fixture.widget into '+process.env.HOME+'/.config/omarchy/plugins/fixture.widget');if(command==='omarchy-plugin-catalog') console.log(JSON.stringify([{id:'fixture.widget',kinds:['bar-widget']}]))\n`;
+    await fs.writeFile(path.join(home, "bin", command), source, { mode: 0o755 });
+  }
+  const child = spawn(process.execPath, [runtime], { env: { ...process.env, HOME: home, PATH: `${home}/bin:${process.env.PATH}`, XDG_DATA_HOME: path.join(home, "data") } });
+  const messages = [];
+  let stderr = "";
+  readline.createInterface({ input: child.stdout }).on("line", line => messages.push(JSON.parse(line)));
+  child.stderr.on("data", data => { stderr += data; });
+  t.after(async () => { child.kill(); await fs.rm(home, { recursive: true, force: true }); });
+  const send = value => child.stdin.write(`${JSON.stringify(value)}\n`);
+  async function wait(predicate) {
+    const deadline = Date.now() + 10000;
+    while (Date.now() < deadline) {
+      const error = messages.find(message => message.type === "error");
+      if (error) throw new Error(error.message);
+      const found = messages.find(predicate);
+      if (found) return found;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    throw new Error(`Timed out: ${JSON.stringify(messages)} ${stderr}`);
+  }
+  send({ type: "launch", extension, command });
+  return { home, send, wait, messages, async calls() { return (await fs.readFile(path.join(home, "calls.jsonl"), "utf8")).trim().split("\n").map(JSON.parse); } };
+}
+
+test("all bundled workflow forms render without opening old pickers", async t => {
+  const manifest = JSON.parse(await fs.readFile(path.join(extension, "package.json"), "utf8"));
+  for (const command of manifest.commands.filter(command => command.mode === "view")) {
+    await t.test(command.name, async t => {
+      const host = await fixture(t, command.name);
+      const rendered = await host.wait(message => message.type === "render" && nodes(message.tree).some(node => ["Form", "List"].includes(node.type)));
+      assert.ok(nodes(rendered.tree).some(node => node.type === "Action.SubmitForm" || node.type === "Action"));
+      if (!["reminders", "install-retro-game"].includes(command.name)) await assert.rejects(fs.access(path.join(host.home, "calls.jsonl")), { code: "ENOENT" });
+    });
+  }
+});
+
+test("web app form validates before executing and passes all noninteractive arguments", async t => {
+  const host = await fixture(t, "install-web-app");
+  const first = await host.wait(message => message.type === "render" && nodes(message.tree).some(node => node.type === "Action.SubmitForm"));
+  let action = nodes(first.tree).find(node => node.type === "Action.SubmitForm");
+  host.send({ type: "event", callback: action.props.onAction.$callback, args: [{ name: "../bad", url: "example.com" }] });
+  const invalid = await host.wait(message => message.type === "render" && nodes(message.tree).some(node => node.props.id === "name" && node.props.error));
+  await assert.rejects(fs.access(path.join(host.home, "calls.jsonl")), { code: "ENOENT" });
+  action = nodes(invalid.tree).find(node => node.type === "Action.SubmitForm");
+  host.send({ type: "event", callback: action.props.onAction.$callback, args: [{ name: "Fixture App", url: "example.com", icon: "internet-web-browser" }] });
+  await host.wait(message => message.type === "close");
+  assert.deepEqual(await host.calls(), [["omarchy-webapp-install", ["Fixture App", "https://example.com/", "internet-web-browser"]]]);
+});
+
+test("TUI form passes command text literally and never invokes a terminal prompt", async t => {
+  const host = await fixture(t, "install-tui");
+  const first = await host.wait(message => message.type === "render" && nodes(message.tree).some(node => node.type === "Action.SubmitForm"));
+  const action = nodes(first.tree).find(node => node.type === "Action.SubmitForm");
+  host.send({ type: "event", callback: action.props.onAction.$callback, args: [{ name: "Fixture TUI", command: "bash -c 'echo $HOME; read'", style: "tile", icon: "utilities-terminal" }] });
+  await host.wait(message => message.type === "close");
+  assert.deepEqual(await host.calls(), [["omarchy-tui-install", ["Fixture TUI", "bash -c 'echo $HOME; read'", "tile", "utilities-terminal"]]]);
+});
+
+test("declining replacement and reminder clearing has no side effect", async t => {
+  const app = await fixture(t, "install-web-app");
+  await fs.mkdir(path.join(app.home, ".local/share/applications"), { recursive: true });
+  await fs.writeFile(path.join(app.home, ".local/share/applications/Existing.desktop"), "preserved");
+  const first = await app.wait(message => message.type === "render" && nodes(message.tree).some(node => node.type === "Action.SubmitForm"));
+  app.send({ type: "event", callback: nodes(first.tree).find(node => node.type === "Action.SubmitForm").props.onAction.$callback, args: [{ name: "Existing", url: "example.com" }] });
+  const request = await app.wait(message => message.type === "request" && message.kind === "confirm");
+  app.send({ type: "response", id: request.id, value: false });
+  await app.wait(message => message.type === "render" && message !== first && nodes(message.tree).some(node => node.type === "Action.SubmitForm"));
+  await assert.rejects(fs.access(path.join(app.home, "calls.jsonl")), { code: "ENOENT" });
+  assert.equal(await fs.readFile(path.join(app.home, ".local/share/applications/Existing.desktop"), "utf8"), "preserved");
+  const clear = await fixture(t, "clear-reminders");
+  const confirmation = await clear.wait(message => message.type === "request" && message.kind === "confirm");
+  clear.send({ type: "response", id: confirmation.id, value: false });
+  await clear.wait(message => message.type === "done");
+  await assert.rejects(fs.access(path.join(clear.home, "calls.jsonl")), { code: "ENOENT" });
+});
+
+test("workflow submissions call each original operation with complete arguments", async t => {
+  const cases = [
+    { command: "reminder", values: () => ({ minutes: "15", message: "Check the oven" }), expected: () => ["omarchy-reminder", ["15", "Check the oven"]] },
+    { command: "share-files", values: file => ({ files: [file] }), expected: file => ["omarchy-menu-share", ["file", file]] },
+    { command: "share-folder", values: (_file, home) => ({ files: [home] }), expected: (_file, home) => ["omarchy-menu-share", ["folder", home]] },
+    { command: "transcode", values: file => ({ files: [file], format: "jpg", resolution: "low" }), expected: file => ["omarchy-transcode", ["--", file, "jpg", "low"]] },
+    { command: "about-image", values: file => ({ files: [file] }), expected: (file, home) => ["omarchy-transcode-ascii", [file, path.join(home, ".config/omarchy/branding/about.txt"), "--width", "54", "--height", "26"]] },
+    { command: "screensaver-image", values: file => ({ files: [file] }), expected: (file, home) => ["omarchy-transcode-ascii", [file, path.join(home, ".config/omarchy/branding/screensaver.txt"), "--width", "80", "--height", "26"]] },
+    { command: "install-wallpaper", values: file => ({ files: [file], apply: true }), expected: (_file, home) => ["omarchy-theme-bg-set", [path.join(home, ".config/omarchy/backgrounds/fixture/fixture.png")]] },
+    { command: "install-theme", values: () => ({ repository: "https://example.com/omarchy-fixture-theme.git" }), expected: () => ["omarchy-theme-install", ["https://example.com/omarchy-fixture-theme.git"]] },
+    { command: "install-retro-game", values: file => ({ files: [file], core: "snes9x" }), expected: file => ["omarchy-games-retro-install", ["snes9x", file]] },
+  ];
+  for (const example of cases) await t.test(example.command, async t => {
+    const host = await fixture(t, example.command);
+    const file = path.join(host.home, "fixture.png");
+    await fs.writeFile(file, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jvWYAAAAASUVORK5CYII=", "base64"));
+    await fs.mkdir(path.join(host.home, ".local/state/omarchy/current"), { recursive: true });
+    await fs.writeFile(path.join(host.home, ".local/state/omarchy/current/theme.name"), "fixture");
+    const first = await host.wait(message => message.type === "render" && nodes(message.tree).some(node => node.type === "Action.SubmitForm"));
+    host.send({ type: "event", callback: nodes(first.tree).find(node => node.type === "Action.SubmitForm").props.onAction.$callback, args: [example.values(file, host.home)] });
+    await host.wait(message => message.type === "close");
+    assert.ok((await host.calls()).some(call => JSON.stringify(call) === JSON.stringify(example.expected(file, host.home))));
+  });
+});
+
+test("adding a shell plugin waits for native confirmation before cloning and enabling", async t => {
+  const host = await fixture(t, "add-shell-plugin");
+  const first = await host.wait(message => message.type === "render" && nodes(message.tree).some(node => node.type === "Action.SubmitForm"));
+  host.send({ type: "event", callback: nodes(first.tree).find(node => node.type === "Action.SubmitForm").props.onAction.$callback,
+    args: [{ repository: "https://example.com/widget.git", enable: true, section: "right" }] });
+  const confirmation = await host.wait(message => message.type === "request" && message.kind === "confirm");
+  await assert.rejects(fs.access(path.join(host.home, "calls.jsonl")), { code: "ENOENT" });
+  host.send({ type: "response", id: confirmation.id, value: true });
+  await host.wait(message => message.type === "close");
+  assert.deepEqual(await host.calls(), [
+    ["omarchy-git-url-check", ["https://example.com/widget.git"]],
+    ["omarchy-plugin-add", ["https://example.com/widget.git", "--yes"]],
+    ["omarchy-plugin-catalog", []],
+    ["omarchy-plugin-enable", ["fixture.widget", "--section", "right"]],
+  ]);
+});
+
+test("branding text forms save multiline Unicode", async t => {
+  for (const target of ["about", "screensaver"]) await t.test(target, async t => {
+    const host = await fixture(t, `${target}-text`);
+    const rendered = await host.wait(message => message.type === "render" && nodes(message.tree).some(node => node.type === "Action.SubmitForm"));
+    const text = "┌──────┐\n│ Test │\n└──────┘\n";
+    host.send({ type: "event", callback: nodes(rendered.tree).find(node => node.type === "Action.SubmitForm").props.onAction.$callback, args: [{ text }] });
+    await host.wait(message => message.type === "close");
+    assert.equal(await fs.readFile(path.join(host.home, `.config/omarchy/branding/${target}.txt`), "utf8"), text);
+  });
+});

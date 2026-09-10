@@ -7,19 +7,30 @@ import { spawn, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { Clipboard } from "./clipboard.mjs";
 import {getApplications} from "./applications.mjs";
+import {readStore, updateStore} from "./storage.mjs";
 
 const bridge = () => globalThis.__commandSpace;
 const component = name => {
   const Component = props => {
     const { children, actions, detail, metadata, searchBarAccessory, ...rest } = props;
+    const storesDropdown = name === "List.Dropdown" && Boolean(props.storeValue);
     const storesValue = Boolean(props.storeValue && props.id);
+    const storageFile = storesDropdown ? "dropdown-values.json" : "form-values.json";
+    const storageKey = props.id || "search";
     const [stored] = React.useState(() => {
-      if (!storesValue) return undefined;
-      const values = readStorage(path.join(bridge().environment.supportPath, "form-values.json"));
-      return values[bridge().environment.commandName]?.[props.id];
+      if (!storesValue && !storesDropdown) return undefined;
+      const values = readStorage(path.join(bridge().environment.supportPath, storageFile));
+      return values[bridge().environment.commandName]?.[storageKey];
     });
-    if (storesValue) {
-      if (stored !== undefined && rest.value === undefined) rest.defaultValue = stored;
+    if ((storesValue || storesDropdown) && stored !== undefined && rest.value === undefined) rest.defaultValue = stored;
+    if (storesDropdown) {
+      const change = rest.onChange;
+      rest.onChange = value => {
+        const file = path.join(bridge().environment.supportPath, storageFile);
+        const command = bridge().environment.commandName;
+        updateStore(file, data => { data[command] = {...data[command], [storageKey]:value}; });
+        return change?.(value);
+      };
     }
     if (name === "Form.DatePicker" && rest.onChange) {
       const change = rest.onChange;
@@ -81,9 +92,7 @@ Action.SubmitForm = ({ onSubmit, ...props }) => React.createElement("Action.Subm
   const result = await onSubmit?.(bridge().formValues(values));
   if (result !== false && Object.keys(stored).length) {
     const file = path.join(supportPath, "form-values.json");
-    const data = readStorage(file);
-    data[commandName] = {...data[commandName], ...stored};
-    writeStorage(data, file);
+    updateStore(file, data => { data[commandName] = {...data[commandName], ...stored}; });
   }
   return result;
 } });
@@ -100,9 +109,7 @@ export const Image = { Mask: { Circle: "circle", RoundedRectangle: "roundedRecta
 export function getPreferenceValues() { return { ...bridge().preferences }; }
 export async function updateCommandMetadata(metadata) {
   const file = path.join(bridge().environment.supportPath, "command-metadata.json");
-  const values = readStorage(file);
-  values[bridge().environment.commandName] = {subtitle:metadata.subtitle};
-  writeStorage(values,file);
+  updateStore(file, values => { values[bridge().environment.commandName] = {subtitle:metadata.subtitle}; });
   bridge().emit({type:"metadata",...metadata});
 }
 export async function openExtensionPreferences() { bridge().preferencesPanel(); }
@@ -120,19 +127,13 @@ export async function showToast(options, title, message) {
 }
 
 const storagePath = () => path.join(bridge().environment.supportPath, "storage.json");
-function readStorage(file = storagePath()) { try { return JSON.parse(fsSync.readFileSync(file, "utf8")); } catch (error) { if (error.code === "ENOENT") return {}; throw error; } }
-function writeStorage(value, file = storagePath()) {
-  fsSync.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-  const temp = `${file}.${process.pid}.tmp`;
-  fsSync.writeFileSync(temp, JSON.stringify(value), { mode: 0o600 });
-  fsSync.renameSync(temp, file);
-}
+function readStorage(file = storagePath()) { return readStore(file); }
 export const LocalStorage = {
   async getItem(key) { return readStorage()[key]; },
-  async setItem(key, value) { const data = readStorage(); data[key] = value; writeStorage(data); },
-  async removeItem(key) { const data = readStorage(); delete data[key]; writeStorage(data); },
+  async setItem(key, value) { updateStore(storagePath(), data => { data[key] = value; }); },
+  async removeItem(key) { updateStore(storagePath(), data => { delete data[key]; }); },
   async allItems() { return readStorage(); },
-  async clear() { writeStorage({}); },
+  async clear() { updateStore(storagePath(), data => { for (const key of Object.keys(data)) delete data[key]; }); },
 };
 export class Cache {
   constructor(options = {}) {
@@ -140,13 +141,13 @@ export class Cache {
     this.file = path.join(bridge().environment.supportPath, "cache.json");
   }
   read() { return readStorage(this.file)[this.namespace] || {}; }
-  write(values) { const data = readStorage(this.file); data[this.namespace] = values; writeStorage(data, this.file); }
+  change(update) { return updateStore(this.file, data => { data[this.namespace] ||= {}; return update(data[this.namespace]); }); }
   get(key) { return this.read()[key]; }
   has(key) { return this.get(key) !== undefined; }
   get isEmpty() { return Object.keys(this.read()).length === 0; }
-  set(key, value) { const data = this.read(); data[key] = value; this.write(data); }
-  remove(key) { const data = this.read(); const had = key in data; delete data[key]; this.write(data); return had; }
-  clear() { this.write({}); }
+  set(key, value) { this.change(data => { data[key] = value; }); }
+  remove(key) { return this.change(data => { const had = key in data; delete data[key]; return had; }); }
+  clear() { this.change(data => { for (const key of Object.keys(data)) delete data[key]; }); }
   subscribe(callback) {
     fsSync.mkdirSync(path.dirname(this.file), { recursive: true, mode: 0o700 });
     let timer;
@@ -159,9 +160,9 @@ export class Cache {
   }
 }
 
-function run(program, args, input) {
+function run(program, args, input, detached = false) {
   return new Promise((resolve, reject) => {
-    const child = spawn(program, args, { stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
+    const child = spawn(program, args, { detached, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
     let stdout = "", stderr = "";
     child.stdout.on("data", data => { stdout += data; });
     child.stderr.on("data", data => { stderr += data; });
@@ -176,16 +177,38 @@ export async function open(target, application) {
     const apps = await getApplications();
     application = apps.find(app => app.bundleId === application || path.basename(app.path) === application)?.path || application;
   }
-  if (application?.endsWith(".desktop")) return run("gio", ["launch", application, target]);
-  if (application) return run(application, [target]);
-  return run("xdg-open", [target]);
+  if (application?.endsWith(".desktop")) return run("gio", ["launch", application, target], undefined, true);
+  if (application) return run(application, [target], undefined, true);
+  return run("xdg-open", [target], undefined, true);
 }
-export async function showInFinder(target) { return run("xdg-open", [path.dirname(target)]); }
+export async function showInFinder(target) { return run("xdg-open", [path.dirname(target)], undefined, true); }
 export async function trash(paths) { for (const item of Array.isArray(paths) ? paths : [paths]) await run("gio", ["trash", item]); }
 export async function getSelectedText() { return run("wl-paste", ["--primary", "--no-newline", "--type", "text"]); }
 export async function getSelectedFinderItems() { throw new Error("The active file manager does not expose selected files through the Linux desktop portal"); }
 export {getApplications, getDefaultApplication, getFrontmostApplication} from "./applications.mjs";
-export async function launchCommand(options) { bridge().emit({ ...options, type: "launch-command", launchType: options.type || "userInitiated", launchContext: options.context, extensionName: options.extensionName || bridge().environment.extensionName }); }
+export async function launchCommand(options) {
+  const extensionName = options.extensionName || bridge().environment.extensionName;
+  if (!/^[\w-]+$/.test(options.name || "") || !/^[\w-]+$/.test(extensionName)) throw new Error("Extension and command names must contain only letters, digits, underscores, or hyphens");
+  const directory = extensionName === bridge().environment.extensionName ? bridge().extensionPath : path.join(path.dirname(bridge().extensionPath), extensionName);
+  let manifest;
+  try { manifest = JSON.parse(await fs.readFile(path.join(directory, "package.json"), "utf8")); }
+  catch (error) { if (error.code === "ENOENT") throw new Error(`Extension command is not installed: ${extensionName}/${options.name}`); throw error; }
+  if (!manifest.commands?.some(command => command.name === options.name)) throw new Error(`Extension command is not installed: ${extensionName}/${options.name}`);
+  if (options.ownerOrAuthorName && options.ownerOrAuthorName !== (manifest.owner || manifest.author)) throw new Error(`The installed ${extensionName} extension has a different owner or author`);
+  if (options.type && !Object.values(LaunchType).includes(options.type)) throw new Error(`Invalid command launch type: ${options.type}`);
+  const launchContext = encodeContext(options.context);
+  bridge().emit({ ...options, context: undefined, type: "launch-command", launchType: options.type || LaunchType.UserInitiated, launchContext, extensionName });
+}
+
+function encodeContext(value, ancestors = new Set()) {
+  if (!value || typeof value !== "object") return value;
+  if (value instanceof Date) return { __commandSpaceLaunchValue: "Date", value: value.toISOString() };
+  if (Buffer.isBuffer(value)) return { __commandSpaceLaunchValue: "Buffer", value: value.toString("base64") };
+  if (ancestors.has(value)) throw new Error("Command launch context must be JSON serializable");
+  ancestors = new Set(ancestors).add(value);
+  if (Array.isArray(value)) return value.map(item => encodeContext(item, ancestors));
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, encodeContext(item, ancestors)]));
+}
 export async function confirmAlert(options) {
   const accepted = await bridge().request("confirm", options);
   await (accepted ? options.primaryAction : options.dismissAction)?.onAction?.();

@@ -3,7 +3,20 @@
   "title": "Developer Tools",
   "description": "Text utilities and a TypeScript extension runtime check",
   "commands": [
-    { "name": "transform", "title": "Transform Text", "description": "Encode, decode, and transform text", "mode": "view" },
-    { "name": "uuid", "title": "Generate UUID", "description": "Copy a new UUID to the clipboard", "mode": "no-view" }
-  ]
+    {
+      "name": "transform",
+      "title": "Transform Text",
+      "description": "Encode, decode, and transform text",
+      "mode": "view",
+      "icon": "icon:TextInput"
+    },
+    {
+      "name": "uuid",
+      "title": "Generate UUID",
+      "description": "Copy a new UUID to the clipboard",
+      "mode": "no-view",
+      "icon": "icon:Hashtag"
+    }
+  ],
+  "icon": "icon:Code"
 }

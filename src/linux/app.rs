@@ -2,6 +2,7 @@ use super::{
     appearance::Colors,
     catalog::{self, Catalog},
     desktop,
+    menu::packages,
     model::{Action, Config, Entry, config_dir, shell_quote},
     windows,
 };
@@ -29,9 +30,14 @@ pub enum Message {
     Hide,
     Show(String, bool),
     Opened(window::Id),
-    Dynamic(String, Vec<Entry>),
+    Dynamic(u64, String, Vec<Entry>),
     Files(String, Vec<Entry>),
     Detail(String, String),
+    PackageToggle(usize, i32),
+    PackageClear,
+    PackagePreview(packages::PreviewRequest, String),
+    PackagePreviewKind,
+    PackageTogglePreview,
     Result(Result<(), String>),
     Actions,
     ActionChoice(usize),
@@ -55,8 +61,10 @@ pub enum Message {
     Extension(u64, serde_json::Value),
     BackgroundResponse(u64, String, Result<serde_json::Value, String>),
     ExtensionInvoke(String, Vec<serde_json::Value>),
+    ExtensionLoadMore(bool),
     ExtensionField(String, serde_json::Value, Option<String>),
     ExtensionFocus(String),
+    WidgetFocus(widget::Id),
     ExtensionEdit(String, widget::text_editor::Action, Option<String>),
     ExtensionPick(String, serde_json::Value),
     ExtensionDate(String, serde_json::Value),
@@ -89,6 +97,7 @@ pub struct Launcher {
     file_generation: Arc<AtomicU64>,
     extension: Option<super::extensions::Session>,
     extension_view: super::extension_view::ExtensionView,
+    extension_title: String,
     alert: Option<(String, serde_json::Value)>,
     config: Config,
     catalog: Catalog,
@@ -99,6 +108,8 @@ pub struct Launcher {
     selected: usize,
     stack: Vec<(String, String, usize)>,
     dynamic: Vec<Entry>,
+    dynamic_generation: u64,
+    dynamic_loading: bool,
     window: Option<window::Id>,
     loading: bool,
     status: String,
@@ -107,6 +118,7 @@ pub struct Launcher {
     action_path: Vec<String>,
     action_query: String,
     detail: Option<(String, Vec<widget::markdown::Item>)>,
+    package_selection: packages::Selection,
 }
 
 impl Launcher {
@@ -161,6 +173,45 @@ impl Launcher {
                 ((*title).into(), Message::EntryAction((*operation).into()))
             }));
         }
+        if let Some(operation) = self.package_operation() {
+            let current = self
+                .results
+                .get(self.selected)
+                .and_then(|entry| packages::name(&self.route, entry));
+            items = vec![
+                (self.package_selection.primary(operation), Message::Submit),
+                (
+                    if current.is_some_and(|name| self.package_selection.contains(name)) {
+                        "Deselect Package"
+                    } else {
+                        "Select Package"
+                    }
+                    .into(),
+                    Message::PackageToggle(self.selected, 0),
+                ),
+                ("Clear Selection".into(), Message::PackageClear),
+                (
+                    if self.package_selection.preview_hidden {
+                        "Show Details"
+                    } else {
+                        "Hide Details"
+                    }
+                    .into(),
+                    Message::PackageTogglePreview,
+                ),
+            ];
+            if operation == packages::Operation::Aur {
+                items.push((
+                    if self.package_selection.kind == packages::PreviewKind::Metadata {
+                        "View PKGBUILD"
+                    } else {
+                        "View Package Details"
+                    }
+                    .into(),
+                    Message::PackagePreviewKind,
+                ));
+            }
+        }
         items.retain(|(title, _)| {
             title
                 .to_lowercase()
@@ -208,6 +259,18 @@ impl Launcher {
     }
 
     pub fn new(initial: Option<String>) -> (Self, Task<Message>) {
+        let (config, status) = match Config::load() {
+            Ok(config) => (config, String::new()),
+            Err(error) => (Config::default(), format!("Configuration: {error}")),
+        };
+        Self::configured(initial, config, status)
+    }
+
+    fn configured(
+        initial: Option<String>,
+        config: Config,
+        status: String,
+    ) -> (Self, Task<Message>) {
         let pending_link = initial
             .as_ref()
             .and_then(|v| v.strip_prefix("link:"))
@@ -216,10 +279,6 @@ impl Launcher {
             Some("root".into())
         } else {
             initial
-        };
-        let (config, status) = match Config::load() {
-            Ok(c) => (c, String::new()),
-            Err(e) => (Config::default(), format!("Configuration: {e}")),
         };
         let mut launcher = Self {
             release: None,
@@ -239,6 +298,7 @@ impl Launcher {
             file_generation: Arc::new(AtomicU64::new(0)),
             extension: None,
             extension_view: Default::default(),
+            extension_title: String::new(),
             alert: None,
             colors: Colors::configured(&config),
             config,
@@ -249,6 +309,8 @@ impl Launcher {
             selected: 0,
             stack: vec![],
             dynamic: vec![],
+            dynamic_generation: 0,
+            dynamic_loading: false,
             window: None,
             loading: true,
             status,
@@ -257,6 +319,7 @@ impl Launcher {
             action_path: Vec::new(),
             action_query: String::new(),
             detail: None,
+            package_selection: Default::default(),
         };
         launcher.rebuild();
         let load = Self::load();
@@ -321,6 +384,9 @@ impl Launcher {
         if toggle && self.window.is_some() && self.route == next {
             return self.hide();
         }
+        self.dynamic_generation = self.dynamic_generation.wrapping_add(1);
+        self.dynamic_loading = false;
+        self.package_selection.clear();
         self.extension = None;
         self.oauth = None;
         self.extension_queries.clear();
@@ -341,6 +407,23 @@ impl Launcher {
         self.detail = None;
         self.actions = false;
         self.selected = 0;
+        if let Some(Action::Extension { extension, command }) = self
+            .route
+            .strip_prefix("extension:")
+            .and_then(|route| route.split_once(':'))
+            .map(|(extension, command)| Action::Extension {
+                extension: extension.into(),
+                command: command.into(),
+            })
+            .or_else(|| self.catalog.menu.native_action(&self.route))
+        {
+            if self.window.is_none() {
+                self.context = windows::Context::capture(self.config.follow_mouse);
+            }
+            let present = self.present();
+            let launch = self.start_extension(&extension, &command, serde_json::Value::Null);
+            return Task::batch([present, launch]);
+        }
         if self.route == "settings" {
             self.settings = Some(super::settings::Editor::new(&self.config));
         }
@@ -387,6 +470,8 @@ impl Launcher {
 
     fn hide(&mut self) -> Task<Message> {
         self.file_generation.fetch_add(1, Ordering::Relaxed);
+        self.dynamic_generation = self.dynamic_generation.wrapping_add(1);
+        self.dynamic_loading = false;
         self.actions = false;
         self.settings = None;
         if self.config.clear_on_hide {
@@ -400,6 +485,9 @@ impl Launcher {
         self.stack
             .push((self.route.clone(), self.query.clone(), self.selected));
         self.route = route;
+        if self.catalog.menu.package_operation(&self.route).is_some() {
+            self.package_selection.enter(&self.route);
+        }
         self.query.clear();
         self.selected = 0;
         self.dynamic.clear();
@@ -412,7 +500,18 @@ impl Launcher {
         self.load_dynamic()
     }
 
-    fn load_dynamic(&self) -> Task<Message> {
+    fn load_dynamic(&mut self) -> Task<Message> {
+        self.dynamic_generation = self.dynamic_generation.wrapping_add(1);
+        self.dynamic_loading = false;
+        if self.loading
+            || self.window.is_none()
+            || self.extension.is_some()
+            || self.settings.is_some()
+            || self.route == "files"
+        {
+            return Task::none();
+        }
+        self.dynamic_loading = true;
         if self.route == "updates" {
             return Task::batch([
                 widget::operation::focus("search"),
@@ -421,29 +520,20 @@ impl Launcher {
                 }),
             ]);
         }
+        let generation = self.dynamic_generation;
         let menu = self.catalog.menu.clone();
         let route = self.route.clone();
+        let mode = route
+            .strip_prefix("mode:")
+            .map(|name| self.config.modes.get(name).cloned().unwrap_or_default());
         Task::batch([
             widget::operation::focus("search"),
             Task::perform(
                 async move {
-                    let key = route.clone();
-                    let result = tokio::task::spawn_blocking(move || {
-                        if route.starts_with("extension-manage:") {
-                            super::extensions::management_entries(&route)
-                        } else if route == "running" {
-                            windows::running_entries()
-                        } else if route == "packages" {
-                            catalog::packages()
-                        } else {
-                            menu.provider(&route)
-                        }
-                    })
-                    .await
-                    .unwrap_or_default();
-                    (key, result)
+                    let result = dynamic_entries(menu, route.clone(), mode).await;
+                    (generation, route, result)
                 },
-                |(key, result)| Message::Dynamic(key, result),
+                |(generation, route, result)| Message::Dynamic(generation, route, result),
             ),
         ])
     }
@@ -453,6 +543,7 @@ impl Launcher {
             Message::UpdateChecked(manual, result) => match result {
                 Ok(release) => {
                     if self.route == "updates" {
+                        self.dynamic_loading = false;
                         self.dynamic = super::updates::entries(&release);
                         self.rebuild();
                     }
@@ -461,7 +552,12 @@ impl Launcher {
                     }
                     self.release = Some(release);
                 }
-                Err(error) if manual => self.status = error,
+                Err(error) if manual => {
+                    if self.route == "updates" {
+                        self.dynamic_loading = false;
+                    }
+                    self.status = error;
+                }
                 Err(_) => {}
             },
             Message::UpdateStarted(result) => {
@@ -488,6 +584,15 @@ impl Launcher {
                 self.rebuild();
                 if let Some(link) = self.pending_link.take() {
                     return self.update(Message::DeepLink(link));
+                }
+                if self.window.is_some()
+                    && self.extension.is_none()
+                    && matches!(
+                        self.catalog.menu.native_action(&self.route),
+                        Some(Action::Extension { .. })
+                    )
+                {
+                    return self.show(&self.route.clone(), false);
                 }
                 return self.load_dynamic();
             }
@@ -554,12 +659,16 @@ impl Launcher {
                         |(query, entries)| Message::Files(query, entries),
                     );
                 }
+                return self.load_package_preview();
             }
             Message::Move(delta) => {
                 if !self.results.is_empty() {
-                    self.selected = (self.selected as i32 + delta)
-                        .rem_euclid(self.results.len() as i32)
-                        as usize;
+                    self.selected = if delta >= 0 && self.extension_view.has_more() {
+                        (self.selected + delta as usize).min(self.results.len() - 1)
+                    } else {
+                        (self.selected as i32 + delta).rem_euclid(self.results.len() as i32)
+                            as usize
+                    };
                     let columns = if self.route == "emoji" {
                         8
                     } else {
@@ -572,7 +681,12 @@ impl Launcher {
                         row.saturating_sub(1) as f32
                             * if self.route == "emoji" { 58.0 } else { 140.0 }
                     } else {
-                        self.selected.saturating_sub(3) as f32 * 58.0
+                        self.selected.saturating_sub(3) as f32
+                            * if self.package_operation().is_some() {
+                                50.0
+                            } else {
+                                46.0
+                            }
                     };
                     let selection = self
                         .extension_view
@@ -580,6 +694,12 @@ impl Launcher {
                         .map_or(Task::none(), |message| self.update(message));
                     return Task::batch([
                         selection,
+                        self.load_package_preview(),
+                        if delta >= 0 && self.selected + columns.max(1) >= self.results.len() {
+                            self.update(Message::ExtensionLoadMore(false))
+                        } else {
+                            Task::none()
+                        },
                         widget::operation::scroll_to(
                             "results",
                             scrollable::AbsoluteOffset { x: 0.0, y: offset },
@@ -589,7 +709,23 @@ impl Launcher {
             }
             Message::Activate(index) => {
                 self.selected = index;
-                return self.activate();
+                if self.package_operation().is_some()
+                    && self
+                        .results
+                        .get(index)
+                        .and_then(|entry| packages::name(&self.route, entry))
+                        .is_some()
+                {
+                    return Task::batch([
+                        self.load_package_preview(),
+                        widget::operation::focus("search"),
+                    ]);
+                }
+                let selection = self
+                    .extension_view
+                    .selection_message(self.results.get(index))
+                    .map_or(Task::none(), |message| self.update(message));
+                return Task::batch([selection, self.activate()]);
             }
             Message::Submit => {
                 return if self.actions {
@@ -643,12 +779,23 @@ impl Launcher {
                 } else {
                     return self.hide();
                 }
-                return widget::operation::focus("search");
+                return Task::batch([
+                    widget::operation::focus("search"),
+                    self.load_package_preview(),
+                ]);
             }
-            Message::Dynamic(route, entries) => {
-                if route == self.route {
+            Message::Dynamic(generation, route, entries) => {
+                if generation == self.dynamic_generation
+                    && route == self.route
+                    && !self.loading
+                    && self.window.is_some()
+                    && self.extension.is_none()
+                    && self.settings.is_none()
+                {
+                    self.dynamic_loading = false;
                     self.dynamic = entries;
                     self.rebuild();
+                    return self.load_package_preview();
                 }
             }
             Message::Files(query, entries) => {
@@ -659,6 +806,56 @@ impl Launcher {
             }
             Message::Detail(title, body) => {
                 self.detail = Some((title, widget::markdown::parse(&body).collect()));
+            }
+            Message::PackageToggle(index, advance) => {
+                if self.package_operation().is_some() {
+                    self.package_selection.enter(&self.route);
+                    self.selected = index.min(self.results.len().saturating_sub(1));
+                    if let Some(name) = self
+                        .results
+                        .get(self.selected)
+                        .and_then(|entry| packages::name(&self.route, entry))
+                    {
+                        self.package_selection.toggle(name);
+                    }
+                    return if advance != 0 {
+                        self.update(Message::Move(advance))
+                    } else {
+                        Task::batch([
+                            self.load_package_preview(),
+                            widget::operation::focus("search"),
+                        ])
+                    };
+                }
+            }
+            Message::PackageClear => {
+                self.package_selection.clear_selected();
+                return widget::operation::focus("search");
+            }
+            Message::PackagePreview(request, body) => {
+                self.package_selection.complete(request, body)
+            }
+            Message::PackagePreviewKind => {
+                if self.package_operation() == Some(packages::Operation::Aur) {
+                    self.package_selection.kind =
+                        if self.package_selection.kind == packages::PreviewKind::Metadata {
+                            packages::PreviewKind::BuildScript
+                        } else {
+                            packages::PreviewKind::Metadata
+                        };
+                    self.package_selection.preview_hidden = false;
+                    return Task::batch([
+                        self.load_package_preview(),
+                        widget::operation::focus("search"),
+                    ]);
+                }
+            }
+            Message::PackageTogglePreview => {
+                self.package_selection.preview_hidden = !self.package_selection.preview_hidden;
+                return Task::batch([
+                    self.load_package_preview(),
+                    widget::operation::focus("search"),
+                ]);
             }
             Message::Result(result) => {
                 if let Err(error) = &result
@@ -742,6 +939,12 @@ impl Launcher {
                 if let Some(editor) = self.settings.as_mut() {
                     editor.change(&key, value);
                 }
+                if key == "tab" {
+                    return widget::operation::scroll_to(
+                        "settings-body",
+                        scrollable::AbsoluteOffset { x: 0., y: 0. },
+                    );
+                }
             }
             Message::CancelSettings => {
                 self.settings = None;
@@ -749,13 +952,7 @@ impl Launcher {
             }
             Message::SaveSettings => {
                 if let Some(editor) = &self.settings {
-                    match editor.validated().and_then(|config| {
-                        config.save()?;
-                        if super::integration::installed() {
-                            super::integration::apply(&config)?;
-                        }
-                        Ok(config)
-                    }) {
+                    match editor.save(&self.config) {
                         Ok(config) => {
                             self.config = config;
                             self.colors = Colors::configured(&self.config);
@@ -971,12 +1168,16 @@ impl Launcher {
                     extension,
                     command,
                     arguments,
+                    launch_context,
+                    background,
+                    fallback_text,
                 }) => {
-                    let show = self.show("root", false);
-                    let launch = self.start_extension(&extension, &command, arguments);
-                    return Task::batch([show, launch]);
+                    return self.launch_command(&serde_json::json!({"extensionName":extension,"name":command,"arguments":arguments,"launchContext":launch_context,"launchType":if background {"background"} else {"userInitiated"},"fallbackText":fallback_text}));
                 }
-                Err(error) => self.status = error,
+                Err(error) => {
+                    self.status = error;
+                    return self.present();
+                }
             },
             Message::EntryAction(action) => return self.entry_action(&action),
             Message::Url(url) => return self.execute(Action::Open(url), false),
@@ -1175,6 +1376,11 @@ impl Launcher {
                     self.status = error;
                 }
             }
+            Message::ExtensionLoadMore(retry) => {
+                if let Some(message) = self.extension_view.load_more(retry) {
+                    return self.update(message);
+                }
+            }
             Message::BackgroundResponse(id, request, result) => {
                 if let Some(worker) = self.backgrounds.get_mut(&id) {
                     let message = match result {
@@ -1332,6 +1538,7 @@ impl Launcher {
                     && let Some(session) = self.extension.as_mut()
                     && let Err(error) = session.send(serde_json::json!({"type":"event","callback":callback,"args":[value],"field":id,"inputRevision":revision})) { self.status = error; }
             }
+            Message::WidgetFocus(id) => return widget::operation::focus(id),
             Message::ExtensionFocus(id) => return self.focus_extension_field(id),
             Message::AlertResponse(value) => {
                 if let Some((id, _)) = self.alert.take() {
@@ -1356,6 +1563,17 @@ impl Launcher {
         if self.alert.is_some() {
             return self.update(Message::AlertResponse(true));
         }
+        if let Some(operation) = self.package_operation() {
+            let current = self
+                .results
+                .get(self.selected)
+                .and_then(|entry| packages::name(&self.route, entry));
+            if let Some(action) =
+                packages::action(operation, &self.package_selection.names(current))
+            {
+                return self.run(action);
+            }
+        }
         if self.extension.is_some() {
             let selected = self
                 .results
@@ -1376,6 +1594,38 @@ impl Launcher {
         self.run(entry.action)
     }
 
+    fn package_operation(&self) -> Option<packages::Operation> {
+        if self.extension.is_some() || self.settings.is_some() {
+            return None;
+        }
+        self.catalog.menu.package_operation(&self.route)
+    }
+
+    fn load_package_preview(&mut self) -> Task<Message> {
+        let Some(operation) = self.package_operation() else {
+            return Task::none();
+        };
+        if self.package_selection.preview_hidden {
+            return Task::none();
+        }
+        self.package_selection.enter(&self.route);
+        let Some(name) = self
+            .results
+            .get(self.selected)
+            .and_then(|entry| packages::name(&self.route, entry))
+        else {
+            return Task::none();
+        };
+        let Some(request) = self.package_selection.request(operation, name) else {
+            return Task::none();
+        };
+        Task::perform(request.run(), |result| {
+            result.map_or(Message::Noop, |(request, body)| {
+                Message::PackagePreview(request, body)
+            })
+        })
+    }
+
     fn run(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Extension { extension, command } => {
@@ -1383,6 +1633,7 @@ impl Launcher {
             }
             Action::Menu(route) => self.enter(route),
             Action::Builtin(name) => match name.as_str() {
+                "back" => self.update(Message::Back),
                 _ if name.starts_with("extension-stop:") => {
                     if let Some((extension, command)) =
                         name.trim_start_matches("extension-stop:").split_once('/')
@@ -1530,47 +1781,6 @@ impl Launcher {
                         |(title, body)| Message::Detail(title, body),
                     )
                 }
-                _ if name.starts_with("mode:") => {
-                    let task = self.enter(name.clone());
-                    let command = self
-                        .config
-                        .modes
-                        .get(name.trim_start_matches("mode:"))
-                        .cloned()
-                        .unwrap_or_default();
-                    Task::batch([
-                        task,
-                        Task::perform(
-                            async move {
-                                let entries = tokio::process::Command::new("bash")
-                                    .args(["-lc", &command])
-                                    .output()
-                                    .await
-                                    .ok()
-                                    .map(|o| {
-                                        String::from_utf8_lossy(&o.stdout)
-                                            .lines()
-                                            .enumerate()
-                                            .map(|(i, line)| {
-                                                let (title, command) =
-                                                    line.split_once('\t').unwrap_or((line, line));
-                                                Entry::new(
-                                                    &format!("mode-item:{i}"),
-                                                    title,
-                                                    "Custom command",
-                                                    "",
-                                                    Action::Shell(command.into()),
-                                                )
-                                            })
-                                            .collect()
-                                    })
-                                    .unwrap_or_default();
-                                (name, entries)
-                            },
-                            |(name, entries)| Message::Dynamic(name, entries),
-                        ),
-                    ])
-                }
                 _ => self.enter(name),
             },
             action => self.execute(action, true),
@@ -1595,7 +1805,7 @@ impl Launcher {
                         });
                     if root.is_none() && has_view {
                         let worker = self.backgrounds.remove(&id).unwrap();
-                        self.extension = Some(worker.session);
+                        self.set_extension(worker.session);
                         self.extension_view = Default::default();
                         self.extension_queries.clear();
                         self.query.clear();
@@ -1745,18 +1955,24 @@ impl Launcher {
             .values_mut()
             .find(|w| w.session.extension == extension && w.session.command == command)
         {
-            if let Err(error) = worker.launch(background, arguments, context) {
+            if let Err(error) = worker.launch_with_fallback(
+                background,
+                arguments,
+                context,
+                event["fallbackText"].as_str(),
+            ) {
                 self.status = error;
             }
             return Task::none();
         }
-        match super::extensions::Session::start_with_options(
+        match super::extensions::Session::start_with_fallback(
             extension,
             command,
             arguments,
             context,
             &self.context,
             background,
+            event["fallbackText"].as_str(),
         ) {
             Ok(session) if background => {
                 self.backgrounds
@@ -1770,12 +1986,25 @@ impl Launcher {
             }
             Err(error) => {
                 self.status = error;
-                Task::none()
+                self.present()
             }
         }
     }
 
     fn set_extension(&mut self, session: super::extensions::Session) {
+        self.dynamic_generation = self.dynamic_generation.wrapping_add(1);
+        self.dynamic_loading = false;
+        self.extension_title =
+            super::extensions::manifest(&super::extensions::root().join(&session.extension))
+                .ok()
+                .and_then(|manifest| {
+                    manifest
+                        .commands
+                        .into_iter()
+                        .find(|command| command.name == session.command)
+                })
+                .map(|command| command.title)
+                .unwrap_or_default();
         self.extension = Some(session);
         self.extension_view = Default::default();
         self.extension_queries.clear();
@@ -1796,7 +2025,7 @@ impl Launcher {
             .values_mut()
             .find(|w| w.session.extension == extension && w.session.command == command)
         {
-            if let Err(error) = worker.refresh(false) {
+            if let Err(error) = worker.launch(false, arguments, serde_json::Value::Null) {
                 self.status = error;
             }
             return self.hide();
@@ -1846,9 +2075,20 @@ impl Launcher {
     }
 
     fn confirm(&mut self, operation: &str, title: &str, message: &str) {
+        let primary = if operation.starts_with("trash:") {
+            "Move to Trash"
+        } else if operation.starts_with("extension-remove:") {
+            "Uninstall"
+        } else if operation == "clear-clipboard" {
+            "Clear history"
+        } else if operation == "quit-all" {
+            "Quit all"
+        } else {
+            "Continue"
+        };
         self.alert = Some((
             format!("native:{operation}"),
-            serde_json::json!({"title":title,"message":message,"primaryAction":{"title":"Continue"},"dismissAction":{"title":"Cancel"}}),
+            serde_json::json!({"title":title,"message":message,"primaryAction":{"title":primary},"dismissAction":{"title":"Cancel"}}),
         ));
         self.actions = false;
     }
@@ -2155,14 +2395,38 @@ impl Launcher {
             return Task::none();
         }
         if self.settings.is_some() {
+            if key == Key::Character("s".into()) && modifiers.control() {
+                return self.update(Message::SaveSettings);
+            }
             if key == Key::Named(Named::Tab) {
-                return if modifiers.shift() {
+                let focus = if modifiers.shift() {
                     widget::operation::focus_previous()
                 } else {
                     widget::operation::focus_next()
                 };
+                return focus.chain(super::focusable::reveal("settings-body"));
             }
             return Task::none();
+        }
+        if self.package_operation().is_some() {
+            if key == Key::Named(Named::Tab) && !modifiers.control() && !modifiers.alt() {
+                return self.update(Message::PackageToggle(
+                    self.selected,
+                    if modifiers.shift() { -1 } else { 1 },
+                ));
+            }
+            if modifiers.control()
+                && modifiers.shift()
+                && matches!(key.as_ref(), Key::Character("b") | Key::Character("B"))
+            {
+                return self.update(Message::PackagePreviewKind);
+            }
+            if modifiers.control()
+                && modifiers.shift()
+                && matches!(key.as_ref(), Key::Character("p") | Key::Character("P"))
+            {
+                return self.update(Message::PackageTogglePreview);
+            }
         }
         if self.extension.is_some() {
             let selected = self.results.get(self.selected).map(|e| e.id.as_str());
@@ -2213,6 +2477,7 @@ impl Launcher {
                 Some(Message::Favorite)
             }
             _ if is_form => None,
+            Key::Named(Named::Enter) => Some(Message::Submit),
             Key::Named(Named::ArrowDown) => Some(Message::Move(columns.max(1))),
             Key::Named(Named::ArrowUp) => Some(Message::Move(-columns.max(1))),
             Key::Named(Named::ArrowLeft) if columns > 0 => Some(Message::Move(-1)),
@@ -2266,50 +2531,50 @@ impl Launcher {
 
     pub fn view(&self, _id: window::Id) -> Element<'_, Message> {
         let colors = self.colors;
-        let mut header = row![
-            button(text("‹").size(25))
-                .style(move |_, s| colors.row(false, s))
-                .on_press(Message::Back),
-            text("COMMAND SPACE").size(12).color(colors.accent),
-            widget::Space::new().width(Fill)
-        ];
-        if self.route != "root" {
-            header = header.push(
-                text(self.catalog.menu.title(&self.route))
-                    .size(12)
-                    .color(colors.muted),
-            );
-        }
+        let context_placeholder = if self.route != "root" && self.extension.is_none() {
+            format!(
+                "Search {}…",
+                self.catalog.menu.title(&self.route).to_lowercase()
+            )
+        } else {
+            self.config.placeholder.clone()
+        };
         let placeholder = self
             .extension_view
             .root()
             .map(|r| r.text("searchBarPlaceholder"))
             .filter(|p| !p.is_empty())
-            .unwrap_or(&self.config.placeholder);
+            .unwrap_or(&context_placeholder);
         let search = text_input(placeholder, &self.query)
             .id("search")
             .on_input(Message::Query)
             .on_submit(Message::Submit)
-            .size(22)
-            .padding([14, 18])
+            .size(20)
+            .padding([18, 8])
             .style(move |_, _| colors.input());
         let content: Element<'_, Message> = if let Some((_, options)) = &self.alert {
             container(
                 column![
                     text(options["title"].as_str().unwrap_or("Confirm")).size(22),
-                    text(options["message"].as_str().unwrap_or("")).size(14),
+                    text(options["message"].as_str().unwrap_or(""))
+                        .size(14)
+                        .color(colors.muted),
                     row![
                         button(text(
                             options["dismissAction"]["title"]
                                 .as_str()
                                 .unwrap_or("Cancel")
                         ))
+                        .padding([8, 16])
+                        .style(move |_, status| colors.row(false, status))
                         .on_press(Message::AlertResponse(false)),
                         button(text(
                             options["primaryAction"]["title"]
                                 .as_str()
                                 .unwrap_or("Continue")
                         ))
+                        .padding([8, 16])
+                        .style(move |_, status| colors.row(true, status))
                         .on_press(Message::AlertResponse(true))
                     ]
                     .spacing(12)
@@ -2321,6 +2586,19 @@ impl Launcher {
             .into()
         } else if let Some(editor) = &self.settings {
             editor.view(colors)
+        } else if self.package_operation().is_some()
+            && self
+                .results
+                .iter()
+                .any(|entry| packages::name(&self.route, entry).is_some())
+        {
+            packages::view(
+                &self.route,
+                &self.results,
+                self.selected,
+                &self.package_selection,
+                colors,
+            )
         } else if self.route == "lemon" {
             container(
                 widget::image(widget::image::Handle::from_bytes(
@@ -2377,30 +2655,32 @@ impl Launcher {
             }
             scrollable(grid).id("results").height(Fill).into()
         } else if self.results.is_empty() {
-            container(
-                column![
-                    text(if self.loading {
-                        "Loading commands…"
-                    } else if self.route == "files" && self.query.len() < 2 {
-                        "Type at least two characters to find files"
-                    } else {
-                        "No results"
-                    })
-                    .size(18),
+            let awaiting_query = self.route == "files" && self.query.len() < 2;
+            let mut empty = column![
+                text(if self.loading || self.dynamic_loading {
+                    "Loading…"
+                } else if awaiting_query {
+                    "Search files by name"
+                } else {
+                    "No results"
+                })
+                .size(18)
+            ]
+            .spacing(10);
+            if !self.loading && !self.dynamic_loading && !awaiting_query {
+                empty = empty.push(
                     text(if self.route == "extensions" {
-                        "Install an extension with command-space extension install <path>"
+                        "Add an extension to get started"
                     } else {
-                        "Search by name, or press Esc to go back"
+                        "Try a different search"
                     })
                     .size(12)
-                    .color(colors.muted)
-                ]
-                .spacing(10),
-            )
-            .center(Fill)
-            .into()
+                    .color(colors.muted),
+                );
+            }
+            container(empty).center(Fill).into()
         } else {
-            let mut list = column![].spacing(2);
+            let mut list = column![].spacing(2).padding([8, 0]);
             let mut section_id = String::new();
             for (index, entry) in self.results.iter().enumerate() {
                 if let Some(section) = self.extension_view.section(entry)
@@ -2427,70 +2707,61 @@ impl Launcher {
                         iced::ContentFit::Contain,
                         colors,
                     )
-                } else if entry.icon.starts_with('/') && std::path::Path::new(&entry.icon).is_file()
-                {
-                    if entry.icon.ends_with(".svg") {
-                        widget::svg(widget::svg::Handle::from_path(&entry.icon))
-                            .width(28)
-                            .height(28)
-                            .into()
-                    } else {
-                        widget::image(widget::image::Handle::from_path(&entry.icon))
-                            .width(28)
-                            .height(28)
-                            .into()
-                    }
                 } else {
-                    text(
-                        if entry.icon.chars().count() <= 4 && !entry.icon.is_empty() {
-                            &entry.icon
-                        } else {
-                            "󰀻"
-                        },
-                    )
-                    .font(if entry.icon_font == "omarchy" {
-                        iced::Font::with_name("omarchy")
-                    } else {
-                        iced::Font::DEFAULT
-                    })
-                    .size(22)
-                    .width(32)
-                    .into()
+                    super::icons::entry(entry, colors)
                 };
                 let subtitle = entry.subtitle.replace('\n', " ");
-                let subtitle: String = subtitle.chars().take(85).collect();
-                let trailing = if self.extension.is_some() {
-                    self.extension_view.accessory(entry)
-                } else if favorite {
-                    "★".into()
-                } else if matches!(entry.action, Action::Menu(_) | Action::Builtin(_)) {
-                    "›".into()
+                let trailing: Element<'_, Message> = if self.extension.is_some() {
+                    self.extension_view.accessories(entry, colors)
                 } else {
-                    String::new()
+                    text(
+                        if matches!(entry.action, Action::Menu(_) | Action::Builtin(_)) {
+                            "›"
+                        } else if matches!(entry.action, Action::Desktop(_)) {
+                            "Application"
+                        } else {
+                            ""
+                        },
+                    )
+                    .size(12)
+                    .color(colors.muted)
+                    .into()
                 };
+                let mut label: Vec<iced::advanced::text::Span<'_, ()>> =
+                    vec![widget::span(&entry.title).color(colors.foreground)];
+                if !subtitle.is_empty() {
+                    label.push(
+                        widget::span(format!("   {subtitle}"))
+                            .color(colors.muted)
+                            .size(13),
+                    );
+                }
                 let body = row![
-                    icon,
-                    column![
-                        text(&entry.title).size(15),
-                        text(subtitle).size(11).color(colors.muted)
-                    ]
-                    .spacing(3)
-                    .width(Fill),
-                    text(trailing).color(colors.accent)
+                    container(icon).center(28),
+                    widget::rich_text(label)
+                        .size(15)
+                        .wrapping(widget::text::Wrapping::None)
+                        .width(Fill),
+                    text(if favorite { "★" } else { "" })
+                        .size(12)
+                        .color(colors.muted),
+                    trailing
                 ]
-                .spacing(12)
+                .spacing(10)
                 .align_y(iced::Alignment::Center);
                 list = list.push(
                     button(body)
-                        .padding([9, 14])
-                        .height(Fixed(56.0))
+                        .padding([6, 10])
+                        .height(Fixed(44.0))
                         .width(Fill)
                         .style(move |_, s| colors.row(selected, s))
                         .on_press(Message::Activate(index)),
                 );
             }
+            list = list.push(self.extension_view.pagination_footer(colors));
             let list = scrollable(list.padding([0, 8]))
                 .id("results")
+                .on_scroll(super::extension_view::ExtensionView::scrolled)
                 .direction(scrollable::Direction::Vertical(
                     if self.config.show_scrollbar {
                         scrollable::Scrollbar::default()
@@ -2540,64 +2811,144 @@ impl Launcher {
             .extension_view
             .root()
             .is_some_and(|root| root.kind == "Form");
-        let mut body = column![header.padding([4, 14]).align_y(iced::Alignment::Center)].spacing(0);
-        if self.settings.is_some() {
-            body = body.push(container(text("Settings").size(20)).padding([10, 18]));
-        } else if is_form
-            || self
-                .extension_view
-                .root()
-                .is_some_and(|root| root.kind == "Detail")
-        {
-            let title = self.extension_view.root().unwrap().text("navigationTitle");
-            if !title.is_empty() {
-                body = body.push(container(text(title).size(20)).padding([10, 18]));
-            }
-        } else {
-            let mut search_row = row![search].align_y(iced::Alignment::Center);
-            if let Some(accessory) = self.extension_view.search_accessory() {
-                search_row = search_row.push(accessory);
-            }
-            body = body.push(search_row);
-        }
-        if self
+        let detail_page = self
             .extension_view
             .root()
-            .is_some_and(|root| root.props["isLoading"] == true)
-        {
-            body = body.push(text("Loading…").size(11).color(colors.accent));
+            .is_some_and(|root| root.kind == "Detail");
+        let nested = self.route != "root"
+            || self.extension.is_some()
+            || self.detail.is_some()
+            || self.settings.is_some();
+        let leading: Element<'_, Message> = if nested {
+            widget::tooltip(
+                button(text("‹").size(28))
+                    .width(32)
+                    .height(36)
+                    .style(move |_, status| colors.row(false, status))
+                    .on_press(Message::Back),
+                "Back",
+                widget::tooltip::Position::Bottom,
+            )
+            .into()
+        } else {
+            container(
+                text("󰍉")
+                    .font(iced::Font::with_name("JetBrainsMono Nerd Font"))
+                    .size(21)
+                    .color(colors.muted),
+            )
+            .center(32)
+            .into()
+        };
+        let mut header = row![leading]
+            .align_y(iced::Alignment::Center)
+            .spacing(6)
+            .padding([0, 12]);
+        if self.settings.is_some() || is_form || detail_page || self.detail.is_some() {
+            let title = if self.settings.is_some() {
+                "Settings"
+            } else {
+                self.extension_view
+                    .root()
+                    .map(|root| root.text("navigationTitle"))
+                    .filter(|title| !title.is_empty())
+                    .or_else(|| self.detail.as_ref().map(|(title, _)| title.as_str()))
+                    .unwrap_or(&self.extension_title)
+            };
+            header = header.push(
+                container(text(title).size(18))
+                    .height(60)
+                    .align_y(iced::alignment::Vertical::Center)
+                    .width(Fill),
+            );
+        } else {
+            header = header.push(search);
+            if let Some(accessory) = self.extension_view.search_accessory(colors) {
+                header = header.push(accessory);
+            }
         }
-        body = body.push(widget::rule::horizontal(1)).push(content);
-        if !self.status.is_empty() {
-            body = body.push(text(&self.status).size(11).color(colors.accent));
-        }
-        body = body.push(widget::rule::horizontal(1)).push(
-            row![
-                text(if is_form || self.settings.is_some() {
-                    String::new()
-                } else {
-                    format!("{} results", self.results.len())
-                })
-                .size(11)
-                .color(colors.muted),
-                widget::Space::new().width(Fill),
-                text(if is_form {
-                    "Tab Next field   Esc Back"
-                } else if self.settings.is_some() {
-                    "Tab Next setting   Esc Back"
-                } else {
-                    "↑↓ Navigate   ↵ Open   Esc Back"
-                })
-                .size(11)
-                .color(colors.muted),
-                button(text("Actions  Ctrl K").size(11))
-                    .style(move |_, s| colors.row(false, s))
-                    .on_press(Message::Actions)
+        let mut body = column![
+            header,
+            widget::rule::horizontal(1).style(move |_| colors.divider()),
+            content
+        ]
+        .spacing(0);
+        if self.settings.is_none() && self.alert.is_none() {
+            let loading = self.loading
+                || self.dynamic_loading
+                || self
+                    .extension_view
+                    .root()
+                    .is_some_and(|root| root.props["isLoading"] == true);
+            let package_primary = self
+                .package_operation()
+                .map(|operation| self.package_selection.primary(operation));
+            let primary = if let Some(primary) = &package_primary {
+                primary.as_str()
+            } else if is_form {
+                "Submit"
+            } else if let Some(entry) = self.results.get(self.selected) {
+                match entry.action {
+                    Action::Copy(_) | Action::CopyImage(_) => "Copy",
+                    Action::Shell(_) => "Run",
+                    _ => "Open",
+                }
+            } else {
+                "Open"
+            };
+            let primary = self
+                .extension_view
+                .panel_nodes(
+                    self.results
+                        .get(self.selected)
+                        .map(|entry| entry.id.as_str()),
+                    None,
+                )
+                .into_iter()
+                .find(|node| matches!(node.kind.as_str(), "Action" | "Action.SubmitForm"))
+                .map(|node| node.text("title"))
+                .filter(|title| !title.is_empty())
+                .unwrap_or(primary);
+            let status = if !self.status.is_empty() {
+                self.status.as_str()
+            } else if loading {
+                "Loading…"
+            } else {
+                ""
+            };
+            let footer = row![
+                text(status)
+                    .size(12)
+                    .color(colors.muted)
+                    .wrapping(widget::text::Wrapping::None)
+                    .width(Fill),
+                button(
+                    row![
+                        text(primary.to_owned()).size(13),
+                        text("↵").size(15).color(colors.muted)
+                    ]
+                    .spacing(10)
+                    .align_y(iced::Alignment::Center)
+                )
+                .padding([5, 9])
+                .style(move |_, status| colors.row(false, status))
+                .on_press(Message::Submit),
+                widget::tooltip(
+                    button(text("•••").size(15))
+                        .padding([5, 10])
+                        .style(move |_, status| colors.row(false, status))
+                        .on_press(Message::Actions),
+                    "Actions · Ctrl K",
+                    widget::tooltip::Position::Top
+                )
             ]
             .align_y(iced::Alignment::Center)
-            .spacing(16)
-            .padding([8, 14]),
-        );
+            .spacing(6)
+            .padding([6, 12]);
+            body = body
+                .push(widget::rule::horizontal(1).style(move |_| colors.divider()))
+                .push(footer);
+        }
         let surface = container(body)
             .width(Fill)
             .height(Fill)
@@ -2608,8 +2959,29 @@ impl Launcher {
         let mut choices = column![].spacing(2);
         for (index, (title, _)) in self.panel_items().into_iter().enumerate() {
             let selected = index == self.action_selected;
+            let mut label = row![].spacing(8).align_y(iced::Alignment::Center);
+            if self.config.show_icons
+                && self.extension.is_some()
+                && let Some(icon) = self.extension_view.panel_icon(
+                    self.results
+                        .get(self.selected)
+                        .map(|entry| entry.id.as_str()),
+                    self.action_path.last().map(String::as_str),
+                    &self.action_query,
+                    index,
+                )
+            {
+                label = label.push(super::extension_image::view(
+                    icon,
+                    18.,
+                    18.,
+                    iced::ContentFit::Contain,
+                    colors,
+                ));
+            }
+            label = label.push(text(title).size(14));
             choices = choices.push(
-                button(text(title).size(14))
+                button(label)
                     .width(Fill)
                     .padding([10, 12])
                     .style(move |_, status| colors.row(selected, status))
@@ -2621,23 +2993,32 @@ impl Launcher {
             .action_path
             .last()
             .and_then(|id| self.extension_view.find(id))
-            .map_or("Actions", |node| node.text("title"));
+            .map(|node| node.text("title"))
+            .or_else(|| {
+                self.results
+                    .get(self.selected)
+                    .map(|entry| entry.title.as_str())
+            })
+            .unwrap_or("Actions");
         let panel = container(
             column![
-                text(title).size(14).color(colors.muted),
+                container(text(title).size(12).color(colors.muted)).padding([10, 12]),
+                scrollable(choices)
+                    .id("action-choices")
+                    .height((rect.height - 180.0).clamp(80.0, 250.0)),
+                widget::rule::horizontal(1).style(move |_| colors.divider()),
                 text_input("Search actions…", &self.action_query)
                     .id("action-search")
                     .on_input(Message::ActionQuery)
                     .on_submit(Message::ActionChoice(self.action_selected))
-                    .padding(10),
-                scrollable(choices)
-                    .id("action-choices")
-                    .height((rect.height - 180.0).clamp(80.0, 250.0))
+                    .size(14)
+                    .padding(12)
+                    .style(move |_, _| colors.input()),
             ]
-            .spacing(8)
-            .padding(12),
+            .spacing(0)
+            .padding(4),
         )
-        .width((rect.width - 24.0).min(390.0))
+        .width((rect.width - 24.0).min(340.0))
         .style(move |_| colors.panel());
         widget::stack![
             surface,
@@ -2648,6 +3029,50 @@ impl Launcher {
         ]
         .into()
     }
+}
+
+async fn dynamic_entries(
+    menu: super::menu::Menu,
+    route: String,
+    mode: Option<String>,
+) -> Vec<Entry> {
+    if let Some(command) = mode {
+        return tokio::process::Command::new("bash")
+            .args(["-lc", &command])
+            .output()
+            .await
+            .ok()
+            .map(|output| {
+                String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .enumerate()
+                    .map(|(index, line)| {
+                        let (title, command) = line.split_once('\t').unwrap_or((line, line));
+                        Entry::new(
+                            &format!("mode-item:{index}"),
+                            title,
+                            "Custom command",
+                            "",
+                            Action::Shell(command.into()),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+    tokio::task::spawn_blocking(move || {
+        if route.starts_with("extension-manage:") {
+            super::extensions::management_entries(&route)
+        } else if route == "running" {
+            windows::running_entries()
+        } else if route == "packages" {
+            catalog::packages()
+        } else {
+            menu.provider(&route)
+        }
+    })
+    .await
+    .unwrap_or_default()
 }
 
 fn execute_action(action: Action, paste: bool) -> Result<(), String> {
@@ -2729,4 +3154,178 @@ fn execute_action(action: Action, paste: bool) -> Result<(), String> {
 fn paste_clipboard() -> Result<(), String> {
     std::thread::sleep(std::time::Duration::from_millis(150));
     windows::paste()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn package_catalog() -> Catalog {
+        let mut catalog = Catalog::default();
+        catalog
+            .menu
+            .merge(
+                r#"{
+                    "install.package": {
+                        "label": "Package",
+                        "action": "xdg-terminal-exec --app-id=org.omarchy.terminal omarchy-pkg-install"
+                    },
+                    "install.aur": {
+                        "label": "AUR",
+                        "action": "xdg-terminal-exec --app-id=org.omarchy.terminal omarchy-pkg-aur-install"
+                    }
+                }"#,
+            )
+            .unwrap();
+        catalog
+    }
+
+    fn launcher(route: &str) -> Launcher {
+        let (mut launcher, _) = Launcher::configured(None, Config::default(), String::new());
+        launcher.restored_backgrounds = true;
+        launcher.route = route.into();
+        launcher.window = Some(window::Id::unique());
+        launcher
+    }
+
+    fn package(route: &str, name: &str) -> Entry {
+        Entry::new(
+            &format!("{route}.native.{name}"),
+            name,
+            "Package",
+            "",
+            Action::Shell("true".into()),
+        )
+    }
+
+    #[test]
+    fn startup_defers_providers_and_rejects_late_empty_results() {
+        let mut launcher = launcher("install.package");
+        let task = launcher.load_dynamic();
+        let stale_generation = launcher.dynamic_generation;
+        assert_eq!(task.units(), 0);
+        assert!(!launcher.dynamic_loading);
+
+        let _ = launcher.update(Message::Query("jq".into()));
+        let task = launcher.update(Message::Loaded(package_catalog()));
+        assert_eq!(task.units(), 2);
+        assert!(launcher.dynamic_loading);
+        let generation = launcher.dynamic_generation;
+        assert_ne!(generation, stale_generation);
+
+        let _ = launcher.update(Message::Dynamic(
+            generation,
+            "install.package".into(),
+            vec![package("install.package", "jq")],
+        ));
+        assert_eq!(launcher.query, "jq");
+        assert_eq!(launcher.results.len(), 1);
+        assert!(!launcher.dynamic_loading);
+
+        let _ = launcher.update(Message::Dynamic(
+            stale_generation,
+            "install.package".into(),
+            vec![],
+        ));
+        assert_eq!(launcher.results[0].title, "jq");
+    }
+
+    #[test]
+    fn returning_to_a_route_rejects_its_previous_provider_response() {
+        let mut launcher = launcher("install.package");
+        launcher.loading = false;
+        launcher.catalog = package_catalog();
+        let _ = launcher.load_dynamic();
+        let stale_generation = launcher.dynamic_generation;
+        let _ = launcher.enter("root".into());
+        let _ = launcher.update(Message::Back);
+        assert_eq!(launcher.route, "install.package");
+
+        let _ = launcher.update(Message::Dynamic(
+            stale_generation,
+            "install.package".into(),
+            vec![package("install.package", "stale")],
+        ));
+        assert!(launcher.results.is_empty());
+        assert!(launcher.dynamic_loading);
+
+        let _ = launcher.update(Message::Dynamic(
+            launcher.dynamic_generation,
+            "install.package".into(),
+            vec![package("install.package", "jq")],
+        ));
+        assert_eq!(launcher.results[0].title, "jq");
+    }
+
+    #[test]
+    fn hidden_windows_reject_pending_provider_results() {
+        let mut launcher = launcher("install.package");
+        launcher.loading = false;
+        launcher.catalog = package_catalog();
+        let _ = launcher.load_dynamic();
+        let stale_generation = launcher.dynamic_generation;
+        let _ = launcher.hide();
+        let _ = launcher.update(Message::Dynamic(
+            stale_generation,
+            "install.package".into(),
+            vec![package("install.package", "jq")],
+        ));
+        assert!(launcher.dynamic.is_empty());
+        assert!(!launcher.dynamic_loading);
+    }
+
+    #[tokio::test]
+    async fn custom_modes_share_one_provider_on_open_and_back() {
+        let mut launcher = launcher("root");
+        launcher.loading = false;
+        launcher.config.modes.insert(
+            "test".into(),
+            "printf 'First item\\tprintf first\\nSecond item\\tprintf second\\n'".into(),
+        );
+        let task = launcher.run(Action::Builtin("mode:test".into()));
+        assert_eq!(task.units(), 2);
+        let generation = launcher.dynamic_generation;
+        let entries = dynamic_entries(
+            launcher.catalog.menu.clone(),
+            launcher.route.clone(),
+            launcher.config.modes.get("test").cloned(),
+        )
+        .await;
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].title, "First item");
+        assert!(matches!(&entries[0].action, Action::Shell(command) if command == "printf first"));
+        let _ = launcher.update(Message::Dynamic(generation, "mode:test".into(), entries));
+        assert_eq!(launcher.results.len(), 2);
+        let _ = launcher.enter("root".into());
+        let task = launcher.update(Message::Back);
+        assert_eq!(launcher.route, "mode:test");
+        assert_eq!(task.units(), 2);
+    }
+
+    #[test]
+    fn file_search_does_not_schedule_a_competing_empty_provider() {
+        let mut launcher = launcher("files");
+        launcher.loading = false;
+        assert_eq!(launcher.load_dynamic().units(), 0);
+        assert!(!launcher.dynamic_loading);
+    }
+
+    #[test]
+    fn package_shortcuts_accept_ctrl_shift_without_changing_query() {
+        let mut launcher = launcher("install.aur");
+        launcher.loading = false;
+        launcher.catalog = package_catalog();
+        launcher.query = "rustdesk-bin".into();
+        launcher.package_selection.enter("install.aur");
+        let modifiers = keyboard::Modifiers::CTRL | keyboard::Modifiers::SHIFT;
+        let _ = launcher.key(Key::Character("B".into()), modifiers, true);
+        assert_eq!(
+            launcher.package_selection.kind,
+            packages::PreviewKind::BuildScript
+        );
+        assert_eq!(launcher.query, "rustdesk-bin");
+        let _ = launcher.key(Key::Character("P".into()), modifiers, true);
+        assert!(launcher.package_selection.preview_hidden);
+        assert_eq!(launcher.query, "rustdesk-bin");
+    }
 }

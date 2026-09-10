@@ -22,6 +22,22 @@
       "name": "grid",
       "title": "Validate Grid",
       "mode": "view"
+    },
+    {
+      "name": "pagination",
+      "title": "Validate Pagination",
+      "mode": "view"
+    },
+    {
+      "name": "launch",
+      "title": "Validate Background Launch",
+      "mode": "view"
+    },
+    {
+      "name": "receive",
+      "title": "Validation Receiver",
+      "mode": "no-view",
+      "interval": "1h"
     }
   ],
   "preferences": [

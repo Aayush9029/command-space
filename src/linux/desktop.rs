@@ -47,10 +47,8 @@ pub fn apps() -> Vec<Entry> {
     }
     let icons = super::icons::index();
     for entry in &mut entries {
-        if !entry.icon.starts_with('/')
-            && let Some(path) = icons.get(&entry.icon)
-        {
-            entry.icon = path.clone();
+        if let Some(path) = super::icons::resolve(&icons, &entry.icon) {
+            entry.icon = path;
         }
     }
     entries.sort_by_key(|e| e.title.to_lowercase());

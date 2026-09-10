@@ -1,127 +1,123 @@
-import fs from "node:fs/promises";
-import fsSync from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { createRequire } from "node:module";
 import readline from "node:readline";
-import React from "react";
-import { build } from "esbuild";
-import { createRenderer } from "./renderer.mjs";
-import { SetupForm } from "./setup.mjs";
-import { aiAvailable } from "./ai.mjs";
-import { browserAvailable } from "./browser.mjs";
+import {spawn} from "node:child_process";
+import {fileURLToPath} from "node:url";
 
-const runtimePath = path.dirname(fileURLToPath(import.meta.url));
-const require = createRequire(import.meta.url);
+const invocation = fileURLToPath(new URL("./invocation.mjs",import.meta.url));
 const emit = message => process.stdout.write(`${JSON.stringify(message)}\n`);
-for (const key of ["log", "info", "debug", "warn"]) console[key] = (...args) => console.error(...args);
-const renderer = createRenderer(emit);
-let stack = [];
-let popCallbacks = [];
-const renderStack = () => renderer.render(React.createElement(React.Fragment, null,
-  ...stack.map((element, index) => React.createElement("NavigationPage", { key: index, active: index === stack.length - 1 }, element))));
-let requestId = 0;
-const pending = new Map();
-globalThis.__commandSpace = {
-  emit,
-  environment: {},
-  preferences: {},
-  ai: JSON.parse(process.env.COMMAND_SPACE_AI_CONFIG || "{}"),
-  launcherPath: process.env.COMMAND_SPACE_BINARY || "command-space",
-  formValues: values => renderer.formValues(values),
-  storedFormValues: values => renderer.storedFormValues(values),
-  push(element, onPop) { stack.push(element); popCallbacks.push(onPop); renderStack(); },
-  pop() { if (stack.length > 1) { stack.pop(); popCallbacks.pop()?.(); renderStack(); } else emit({ type: "pop" }); },
-  root() { while (stack.length > 1) { stack.pop(); popCallbacks.pop()?.(); } renderStack(); },
-  request(kind, options, signal) {
-    const id = String(++requestId);
-    return new Promise((resolve, reject) => {
-      const abort = () => { pending.delete(id); emit({type:"cancel-request", id}); reject(signal.reason || new Error("Request canceled")); };
-      if (signal?.aborted) return reject(signal.reason);
-      signal?.addEventListener("abort", abort, {once:true});
-      const finish = callback => value => { signal?.removeEventListener("abort", abort); callback(value); };
-      pending.set(id, { resolve:finish(resolve), reject:finish(reject) });
-      emit({ type: "request", kind, id, options });
-    });
-  },
-};
+const report = error => emit({type:"error",message:error.stack || String(error)});
+const input = readline.createInterface({input:process.stdin});
+let active;
+let generation = 0;
+let launching = false;
+let stopping = false;
+const queue = [];
 
-async function launch(options) {
-  const extensionPath = path.resolve(options.extension);
-  const manifest = JSON.parse(await fs.readFile(path.join(extensionPath, "package.json"), "utf8"));
-  const command = manifest.commands?.find(command => command.name === options.command);
-  if (!command) throw new Error(`Command ${options.command} is not declared in package.json`);
-  const home = process.env.HOME;
-  const support = path.join(process.env.XDG_DATA_HOME || path.join(home, ".local/share"), "command-space", "extension-data", manifest.name);
-  await fs.mkdir(support, { recursive: true, mode: 0o700 });
-  const preferences = {};
-  let stored = {};
-  try { stored = JSON.parse(await fs.readFile(path.join(support, "preferences.json"), "utf8")); } catch (error) { if (error.code !== "ENOENT") throw error; }
-  const definitions = [...(manifest.preferences || []), ...(command.preferences || [])];
-  for (const preference of [...(manifest.preferences || []), ...(command.preferences || [])]) if (preference.default !== undefined) preferences[preference.name] = preference.default;
-  Object.assign(preferences, stored.extension || stored, stored.commands?.[command.name] || {});
-  Object.assign(preferences, options.preferences || {});
-  globalThis.__commandSpace.preferences = preferences;
-  globalThis.__commandSpace.environment = { commandName: command.name, extensionName: manifest.name, assetsPath: path.join(extensionPath, "assets"), supportPath: support, isDevelopment: process.env.COMMAND_SPACE_DEVELOPMENT === "1", appearance: process.env.COMMAND_SPACE_APPEARANCE || "dark", textSize: "medium", raycastVersion: "1.0.0", commandMode: command.mode || "view", launchType: options.launchType || "userInitiated", canAccess: capability => capability?.__commandSpaceCapability === "windows" || (capability?.__commandSpaceCapability === "ai" && aiAvailable()) || (capability?.__commandSpaceCapability === "browser" && browserAvailable()) };
-  globalThis.__commandSpace.preferencesPanel = () => {
-    const panel = React.createElement(SetupForm, { title: `${manifest.title || manifest.name} Preferences`, fields: definitions, values: preferences, submitTitle: "Save Preferences", onSubmit: async values => {
-      const extensionValues = Object.fromEntries((manifest.preferences || []).map(field => [field.name, values[field.name]]));
-      const commandValues = Object.fromEntries((command.preferences || []).map(field => [field.name, values[field.name]]));
-      const next = { extension: extensionValues, commands: { ...(stored.commands || {}), [command.name]: commandValues } };
-      const temporary = path.join(support, `preferences.${process.pid}.tmp`);
-      await fs.writeFile(temporary, JSON.stringify(next), { mode: 0o600 });
-      await fs.rename(temporary, path.join(support, "preferences.json"));
-      await launch({ ...options, openPreferences: false, setupComplete: false });
-    } });
-    globalThis.__commandSpace.push(panel);
-  };
-  if (options.openPreferences || definitions.some(field => field.required && (preferences[field.name] === undefined || preferences[field.name] === ""))) {
-    globalThis.__commandSpace.preferencesPanel(); return;
-  }
-  if (command.arguments?.length && !options.setupComplete && options.arguments === undefined) {
-    stack = [React.createElement(SetupForm, { title: command.title, fields: command.arguments, submitTitle: "Run Command", onSubmit: async arguments_ => {
-      await launch({ ...options, arguments: arguments_, setupComplete: true });
-    } })];
-    popCallbacks = []; renderStack(); return;
-  }
-  const candidates = command.path ? [path.resolve(extensionPath, command.path)] : ["tsx", "ts", "jsx", "js", "mjs"].map(ext => path.join(extensionPath, "src", `${command.name}.${ext}`));
-  const entry = candidates.find(file => fsSync.existsSync(file));
-  if (!entry || !entry.startsWith(`${extensionPath}${path.sep}`)) throw new Error(`Source file missing for ${command.name}`);
-  const result = await build({
-    entryPoints: [entry], bundle: true, write: false, platform: "node", format: "cjs", target: "node22", jsx: "automatic", sourcemap: "inline",
-    nodePaths: [path.join(runtimePath, "node_modules")],
-    plugins: [{ name: "command-space-api", setup(build) {
-      build.onResolve({ filter: /^@raycast\/api$/ }, () => ({ path: path.join(runtimePath, "api.mjs") }));
-      build.onResolve({ filter: /^react(?:\/.*)?$/ }, args => ({ path: require.resolve(args.path), external: true }));
-    } }],
-  });
-  const filename = path.join(extensionPath, `.command-space-${command.name}.cjs`);
-  const module = { exports: {} };
-  const extensionRequire = createRequire(path.join(extensionPath, "package.json"));
-  new Function("require", "module", "exports", "__filename", "__dirname", result.outputFiles[0].text)(extensionRequire, module, module.exports, filename, extensionPath);
-  const exported = module.exports.default;
-  if (typeof exported !== "function") throw new Error("Extension command must have a default function export");
-  const props = { arguments: options.arguments || {}, launchContext: options.launchContext, fallbackText: options.fallbackText };
-  if (command.mode === "no-view") {
-    await exported(props); emit({ type: "done" });
-  } else {
-    stack = [React.createElement(exported, props)]; popCallbacks = []; renderStack();
+function callbacks(value, prefix) {
+  if (!value || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(item => callbacks(item,prefix));
+  return Object.fromEntries(Object.entries(value).map(([key,item]) => [key,key === "$callback" ? `${prefix}${item}` : callbacks(item,prefix)]));
+}
+
+function tree(nodes, prefix) {
+  return nodes.map(node => ({...node,id:`${prefix}${node.id}`,props:callbacks(node.props,prefix),children:tree(node.children || [],prefix)}));
+}
+
+function terminate(worker) {
+  if (!worker) return Promise.resolve();
+  worker.terminating = true;
+  try { process.kill(-worker.child.pid,"SIGKILL"); } catch(error) { if (error.code !== "ESRCH") report(error); }
+  return worker.closed;
+}
+
+async function advance() {
+  if (launching || stopping || !queue.length || (active && !active.ready)) return;
+  launching = true;
+  try {
+    const previous = active;
+    active = undefined;
+    await terminate(previous);
+    if (stopping) return;
+    const options = queue.shift();
+    const child = spawn(process.execPath,[invocation],{detached:true,stdio:["pipe","pipe","pipe"]});
+    const worker = {child,prefix:`${++generation}:`,background:options.launchType === "background",ready:false,terminating:false,closed:null};
+    worker.closed = new Promise(resolve => {
+      child.once("close",() => { emit({type:"invocation-ended",pid:child.pid}); resolve(); });
+    });
+    active = worker;
+    emit({type:"invocation-started",pid:child.pid});
+    child.stderr.pipe(process.stderr,{end:false});
+    child.stdin.on("error",error => { if (!worker.terminating && active === worker) report(error); });
+    child.on("error",report);
+    child.on("exit",(code,signal) => {
+      if (worker.terminating) return;
+      try { process.kill(-child.pid,"SIGKILL"); } catch {}
+      if (active === worker) {
+        active = undefined;
+        report(new Error(`Extension invocation exited unexpectedly (${signal || code})`));
+        advance().catch(report);
+      }
+    });
+    readline.createInterface({input:child.stdout}).on("line",line => {
+      if (worker.terminating || active !== worker) return;
+      try { receive(worker,JSON.parse(line)); } catch(error) { report(error); }
+    });
+    child.stdin.write(`${JSON.stringify(options)}\n`);
+  } finally {
+    launching = false;
   }
 }
 
-const input = readline.createInterface({ input: process.stdin });
-const report = error => emit({ type: "error", message: error.stack || String(error) });
-let launches = Promise.resolve();
+function receive(worker,message) {
+  if (message.type === "invocation-ready") {
+    worker.ready = true;
+    advance().catch(report);
+  } else if (message.type === "relaunch") {
+    worker.ready = true;
+    queue.unshift({...message.options,type:"launch"});
+    advance().catch(report);
+  } else if (message.type === "done") {
+    worker.ready = true;
+    active = undefined;
+    launching = true;
+    terminate(worker).then(() => { emit(message); launching = false; return advance(); }).catch(error => { launching = false; report(error); });
+  } else if (message.type === "render") {
+    emit({...message,tree:tree(message.tree,worker.prefix)});
+  } else if (message.type === "request" || message.type === "cancel-request") {
+    emit({...message,id:`${worker.prefix}${message.id}`});
+  } else emit(message);
+}
+
+async function stop() {
+  if (stopping) return;
+  stopping = true;
+  queue.length = 0;
+  input.close();
+  await terminate(active);
+  process.exit(0);
+}
+process.once("SIGTERM",() => { stop().catch(report); });
+process.once("SIGINT",() => { stop().catch(report); });
+
 for await (const line of input) {
   try {
     if (line.length > 1024 * 1024) throw new Error("Extension input exceeds one megabyte");
     const message = JSON.parse(line);
-    if (message.type === "launch") launches = launches.then(() => launch(message)).catch(report);
-    else if (message.type === "event") renderer.invoke(message.callback, message.args || [], message).catch(report);
-    else if (message.type === "pop") globalThis.__commandSpace.pop();
-    else if (message.type === "preferences") globalThis.__commandSpace.preferencesPanel();
-    else if (message.type === "response") { const request = pending.get(message.id); pending.delete(message.id); if (message.error) request?.reject(new Error(message.error)); else request?.resolve(message.value); }
-    else if (message.type === "stop") break;
-  } catch (error) { report(error); }
+    if (message.type === "launch") {
+      if (message.scheduled) {
+        for (let index=queue.length-1;index>=0;index--) if (queue[index].scheduled) queue.splice(index,1);
+        if (active?.background) active.ready = true;
+      }
+      queue.push(message);
+      advance().catch(report);
+    } else if (message.type === "stop") break;
+    else if (active && !active.terminating) {
+      const key = message.type === "event" ? "callback" : message.type === "response" ? "id" : undefined;
+      if (key) {
+        if (!String(message[key]).startsWith(active.prefix)) continue;
+        message[key] = String(message[key]).slice(active.prefix.length);
+      }
+      active.child.stdin.write(`${JSON.stringify(message)}\n`);
+    }
+  } catch(error) { report(error); }
 }
-process.exit(0);
+await stop();

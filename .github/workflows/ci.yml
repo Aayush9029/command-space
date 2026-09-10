@@ -21,7 +21,7 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: runtime/package-lock.json
-      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev libssl-dev pkg-config fonts-dejavu-core
+      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev libssl-dev pkg-config fonts-dejavu-core util-linux
       - run: rustup show
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
@@ -29,3 +29,4 @@ jobs:
       - run: cargo test --locked --all-targets
       - run: npm ci --prefix runtime --ignore-scripts --no-audit --no-fund
       - run: npm test --prefix runtime
+      - run: node --test extensions/omarchy-tools/tests/*.test.mjs

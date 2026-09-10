@@ -1,0 +1,1970 @@
+{
+  "apiVersion": "2.2.1",
+  "phosphorVersion": "2.1.1",
+  "icons": {
+    "AddPerson": {
+      "value": "add-person-16",
+      "asset": "regular/user-plus.svg"
+    },
+    "Airplane": {
+      "value": "airplane-16",
+      "asset": "regular/airplane.svg"
+    },
+    "AirplaneFilled": {
+      "value": "airplane-filled-16",
+      "asset": "fill/airplane.svg"
+    },
+    "AirplaneLanding": {
+      "value": "airplane-landing-16",
+      "asset": "regular/airplane-landing.svg"
+    },
+    "AirplaneTakeoff": {
+      "value": "airplane-takeoff-16",
+      "asset": "regular/airplane-takeoff.svg"
+    },
+    "Airpods": {
+      "value": "airpods-16",
+      "asset": "custom/airpods.svg"
+    },
+    "Alarm": {
+      "value": "alarm-16",
+      "asset": "regular/alarm.svg"
+    },
+    "AlarmRinging": {
+      "value": "alarm-ringing-16",
+      "asset": "custom/alarm-ringing.svg"
+    },
+    "AlignCentre": {
+      "value": "align-centre-16",
+      "asset": "regular/text-align-center.svg"
+    },
+    "AlignLeft": {
+      "value": "align-left-16",
+      "asset": "regular/text-align-left.svg"
+    },
+    "AlignRight": {
+      "value": "align-right-16",
+      "asset": "regular/text-align-right.svg"
+    },
+    "AmericanFootball": {
+      "value": "american-football-16",
+      "asset": "regular/football.svg"
+    },
+    "Anchor": {
+      "value": "anchor-16",
+      "asset": "regular/anchor.svg"
+    },
+    "AppWindow": {
+      "value": "app-window-16",
+      "asset": "regular/app-window.svg"
+    },
+    "AppWindowGrid2x2": {
+      "value": "app-window-grid-2x2-16",
+      "asset": "custom/window-grid-two.svg"
+    },
+    "AppWindowGrid3x3": {
+      "value": "app-window-grid-3x3-16",
+      "asset": "custom/window-grid-three.svg"
+    },
+    "AppWindowList": {
+      "value": "app-window-list-16",
+      "asset": "custom/window-list.svg"
+    },
+    "AppWindowSidebarLeft": {
+      "value": "app-window-sidebar-left-16",
+      "asset": "regular/sidebar.svg"
+    },
+    "AppWindowSidebarRight": {
+      "value": "app-window-sidebar-right-16",
+      "asset": "custom/sidebar-right.svg"
+    },
+    "ArrowClockwise": {
+      "value": "arrow-clockwise-16",
+      "asset": "regular/arrow-clockwise.svg"
+    },
+    "ArrowCounterClockwise": {
+      "value": "arrow-counter-clockwise-16",
+      "asset": "regular/arrow-counter-clockwise.svg"
+    },
+    "ArrowDown": {
+      "value": "arrow-down-16",
+      "asset": "regular/arrow-down.svg"
+    },
+    "ArrowDownCircle": {
+      "value": "arrow-down-circle-16",
+      "asset": "regular/arrow-circle-down.svg"
+    },
+    "ArrowDownCircleFilled": {
+      "value": "arrow-down-circle-filled-16",
+      "asset": "fill/arrow-circle-down.svg"
+    },
+    "ArrowLeft": {
+      "value": "arrow-left-16",
+      "asset": "regular/arrow-left.svg"
+    },
+    "ArrowLeftCircle": {
+      "value": "arrow-left-circle-16",
+      "asset": "regular/arrow-circle-left.svg"
+    },
+    "ArrowLeftCircleFilled": {
+      "value": "arrow-left-circle-filled-16",
+      "asset": "fill/arrow-circle-left.svg"
+    },
+    "ArrowNe": {
+      "value": "arrow-ne-16",
+      "asset": "regular/arrow-up-right.svg"
+    },
+    "ArrowRight": {
+      "value": "arrow-right-16",
+      "asset": "regular/arrow-right.svg"
+    },
+    "ArrowRightCircle": {
+      "value": "arrow-right-circle-16",
+      "asset": "regular/arrow-circle-right.svg"
+    },
+    "ArrowRightCircleFilled": {
+      "value": "arrow-right-circle-filled-16",
+      "asset": "fill/arrow-circle-right.svg"
+    },
+    "ArrowUp": {
+      "value": "arrow-up-16",
+      "asset": "regular/arrow-up.svg"
+    },
+    "ArrowUpCircle": {
+      "value": "arrow-up-circle-16",
+      "asset": "regular/arrow-circle-up.svg"
+    },
+    "ArrowUpCircleFilled": {
+      "value": "arrow-up-circle-filled-16",
+      "asset": "fill/arrow-circle-up.svg"
+    },
+    "ArrowsContract": {
+      "value": "arrows-contract-16",
+      "asset": "regular/arrows-in.svg"
+    },
+    "ArrowsExpand": {
+      "value": "arrows-expand-16",
+      "asset": "regular/arrows-out.svg"
+    },
+    "AtSymbol": {
+      "value": "at-symbol-16",
+      "asset": "regular/at.svg"
+    },
+    "BandAid": {
+      "value": "band-aid-16",
+      "asset": "regular/bandaids.svg"
+    },
+    "BankNote": {
+      "value": "bank-note-16",
+      "asset": "regular/money.svg"
+    },
+    "BarChart": {
+      "value": "bar-chart-16",
+      "asset": "regular/chart-bar.svg"
+    },
+    "BarCode": {
+      "value": "bar-code-16",
+      "asset": "regular/barcode.svg"
+    },
+    "BathTub": {
+      "value": "bath-tub-16",
+      "asset": "regular/bathtub.svg"
+    },
+    "Battery": {
+      "value": "battery-16",
+      "asset": "regular/battery-full.svg"
+    },
+    "BatteryCharging": {
+      "value": "battery-charging-16",
+      "asset": "regular/battery-charging.svg"
+    },
+    "BatteryDisabled": {
+      "value": "battery-disabled-16",
+      "asset": "custom/battery-slash.svg"
+    },
+    "Bell": {
+      "value": "bell-16",
+      "asset": "regular/bell.svg"
+    },
+    "BellDisabled": {
+      "value": "bell-disabled-16",
+      "asset": "regular/bell-slash.svg"
+    },
+    "Bike": {
+      "value": "bike-16",
+      "asset": "regular/bicycle.svg"
+    },
+    "Binoculars": {
+      "value": "binoculars-16",
+      "asset": "regular/binoculars.svg"
+    },
+    "Bird": {
+      "value": "bird-16",
+      "asset": "regular/bird.svg"
+    },
+    "BlankDocument": {
+      "value": "blank-document-16",
+      "asset": "regular/file.svg"
+    },
+    "Bluetooth": {
+      "value": "bluetooth-16",
+      "asset": "regular/bluetooth.svg"
+    },
+    "Boat": {
+      "value": "boat-16",
+      "asset": "regular/boat.svg"
+    },
+    "Bold": {
+      "value": "bold-16",
+      "asset": "regular/text-b.svg"
+    },
+    "Bolt": {
+      "value": "bolt-16",
+      "asset": "regular/lightning.svg"
+    },
+    "BoltDisabled": {
+      "value": "bolt-disabled-16",
+      "asset": "regular/lightning-slash.svg"
+    },
+    "Book": {
+      "value": "book-16",
+      "asset": "regular/book.svg"
+    },
+    "Bookmark": {
+      "value": "bookmark-16",
+      "asset": "regular/bookmark.svg"
+    },
+    "Box": {
+      "value": "box-16",
+      "asset": "regular/package.svg"
+    },
+    "Brush": {
+      "value": "brush-16",
+      "asset": "regular/paint-brush.svg"
+    },
+    "Bubble": {
+      "value": "speech-bubble-16",
+      "asset": "regular/chat.svg"
+    },
+    "Bug": {
+      "value": "bug-16",
+      "asset": "regular/bug.svg"
+    },
+    "Building": {
+      "value": "building-16",
+      "asset": "regular/building.svg"
+    },
+    "BulletPoints": {
+      "value": "bullet-points-16",
+      "asset": "regular/list-bullets.svg"
+    },
+    "BullsEye": {
+      "value": "bulls-eye-16",
+      "asset": "regular/target.svg"
+    },
+    "BullsEyeMissed": {
+      "value": "bulls-eye-missed-16",
+      "asset": "custom/target-missed.svg"
+    },
+    "Buoy": {
+      "value": "buoy-16",
+      "asset": "regular/lifebuoy.svg"
+    },
+    "Calculator": {
+      "value": "calculator-16",
+      "asset": "regular/calculator.svg"
+    },
+    "Calendar": {
+      "value": "calendar-16",
+      "asset": "regular/calendar.svg"
+    },
+    "Camera": {
+      "value": "camera-16",
+      "asset": "regular/camera.svg"
+    },
+    "Car": {
+      "value": "car-16",
+      "asset": "regular/car.svg"
+    },
+    "Cart": {
+      "value": "cart-16",
+      "asset": "regular/shopping-cart.svg"
+    },
+    "Cd": {
+      "value": "cd-16",
+      "asset": "regular/disc.svg"
+    },
+    "Center": {
+      "value": "center-16",
+      "asset": "regular/align-center-horizontal.svg"
+    },
+    "Check": {
+      "value": "check-16",
+      "asset": "regular/check.svg"
+    },
+    "CheckCircle": {
+      "value": "check-circle-16",
+      "asset": "regular/check-circle.svg"
+    },
+    "CheckList": {
+      "value": "check-list-16",
+      "asset": "regular/list-checks.svg"
+    },
+    "CheckRosette": {
+      "value": "check-rosette-16",
+      "asset": "regular/seal-check.svg"
+    },
+    "Checkmark": {
+      "value": "checkmark-16",
+      "asset": "regular/check.svg"
+    },
+    "ChessPiece": {
+      "value": "chess-piece-16",
+      "asset": "custom/chess-knight.svg"
+    },
+    "ChevronDown": {
+      "value": "chevron-down-16",
+      "asset": "regular/caret-down.svg"
+    },
+    "ChevronDownSmall": {
+      "value": "chevron-down-small-16",
+      "asset": "custom/caret-down-small.svg"
+    },
+    "ChevronLeft": {
+      "value": "chevron-left-16",
+      "asset": "regular/caret-left.svg"
+    },
+    "ChevronLeftSmall": {
+      "value": "chevron-left-small-16",
+      "asset": "custom/caret-left-small.svg"
+    },
+    "ChevronRight": {
+      "value": "chevron-right-16",
+      "asset": "regular/caret-right.svg"
+    },
+    "ChevronRightSmall": {
+      "value": "chevron-right-small-16",
+      "asset": "custom/caret-right-small.svg"
+    },
+    "ChevronUp": {
+      "value": "chevron-up-16",
+      "asset": "regular/caret-up.svg"
+    },
+    "ChevronUpDown": {
+      "value": "chevron-up-down-16",
+      "asset": "regular/caret-up-down.svg"
+    },
+    "ChevronUpSmall": {
+      "value": "chevron-up-small-16",
+      "asset": "custom/caret-up-small.svg"
+    },
+    "Circle": {
+      "value": "circle-16",
+      "asset": "regular/circle.svg"
+    },
+    "CircleDisabled": {
+      "value": "circle-disabled-16",
+      "asset": "regular/prohibit.svg"
+    },
+    "CircleEllipsis": {
+      "value": "circle-ellipsis-16",
+      "asset": "regular/dots-three-circle.svg"
+    },
+    "CircleFilled": {
+      "value": "circle-filled-16",
+      "asset": "fill/circle.svg"
+    },
+    "CircleProgress": {
+      "value": "circle-progress-16",
+      "asset": "regular/spinner-gap.svg"
+    },
+    "CircleProgress100": {
+      "value": "circle-progress-100-16",
+      "asset": "custom/progress-100.svg"
+    },
+    "CircleProgress25": {
+      "value": "circle-progress-25-16",
+      "asset": "custom/progress-25.svg"
+    },
+    "CircleProgress50": {
+      "value": "circle-progress-50-16",
+      "asset": "custom/progress-50.svg"
+    },
+    "CircleProgress75": {
+      "value": "circle-progress-75-16",
+      "asset": "custom/progress-75.svg"
+    },
+    "ClearFormatting": {
+      "value": "clear-formatting-16",
+      "asset": "regular/text-t-slash.svg"
+    },
+    "Clipboard": {
+      "value": "copy-clipboard-16",
+      "asset": "regular/clipboard.svg"
+    },
+    "Clock": {
+      "value": "clock-16",
+      "asset": "regular/clock.svg"
+    },
+    "Cloud": {
+      "value": "cloud-16",
+      "asset": "regular/cloud.svg"
+    },
+    "CloudLightning": {
+      "value": "cloud-lightning-16",
+      "asset": "regular/cloud-lightning.svg"
+    },
+    "CloudRain": {
+      "value": "cloud-rain-16",
+      "asset": "regular/cloud-rain.svg"
+    },
+    "CloudSnow": {
+      "value": "cloud-snow-16",
+      "asset": "regular/cloud-snow.svg"
+    },
+    "CloudSun": {
+      "value": "cloud-sun-16",
+      "asset": "regular/cloud-sun.svg"
+    },
+    "Code": {
+      "value": "code-16",
+      "asset": "regular/code.svg"
+    },
+    "CodeBlock": {
+      "value": "code-block-16",
+      "asset": "regular/code-block.svg"
+    },
+    "Cog": {
+      "value": "cog-16",
+      "asset": "regular/gear.svg"
+    },
+    "Coin": {
+      "value": "coin-16",
+      "asset": "regular/coin.svg"
+    },
+    "Coins": {
+      "value": "coins-16",
+      "asset": "regular/coins.svg"
+    },
+    "CommandSymbol": {
+      "value": "command-symbol-16",
+      "asset": "regular/command.svg"
+    },
+    "Compass": {
+      "value": "compass-16",
+      "asset": "regular/compass.svg"
+    },
+    "ComputerChip": {
+      "value": "computer-chip-16",
+      "asset": "regular/cpu.svg"
+    },
+    "Contrast": {
+      "value": "contrast-16",
+      "asset": "regular/circle-half.svg"
+    },
+    "CopyClipboard": {
+      "value": "copy-clipboard-16",
+      "asset": "regular/clipboard.svg"
+    },
+    "CreditCard": {
+      "value": "credit-card-16",
+      "asset": "regular/credit-card.svg"
+    },
+    "CricketBall": {
+      "value": "cricket-ball-16",
+      "asset": "custom/cricket-ball.svg"
+    },
+    "Crop": {
+      "value": "crop-16",
+      "asset": "regular/crop.svg"
+    },
+    "Crown": {
+      "value": "crown-16",
+      "asset": "regular/crown.svg"
+    },
+    "Crypto": {
+      "value": "crypto-16",
+      "asset": "regular/currency-btc.svg"
+    },
+    "DeleteDocument": {
+      "value": "delete-document-16",
+      "asset": "regular/file-x.svg"
+    },
+    "Desktop": {
+      "value": "desktop-16",
+      "asset": "regular/desktop.svg"
+    },
+    "Devices": {
+      "value": "devices-16",
+      "asset": "regular/devices.svg"
+    },
+    "Dna": {
+      "value": "dna-16",
+      "asset": "regular/dna.svg"
+    },
+    "Document": {
+      "value": "blank-document-16",
+      "asset": "regular/file.svg"
+    },
+    "Dot": {
+      "value": "dot-16",
+      "asset": "regular/dot.svg"
+    },
+    "Download": {
+      "value": "download-16",
+      "asset": "regular/download.svg"
+    },
+    "Droplets": {
+      "value": "droplets-16",
+      "asset": "custom/droplets.svg"
+    },
+    "Duplicate": {
+      "value": "duplicate-16",
+      "asset": "regular/copy.svg"
+    },
+    "EditShape": {
+      "value": "edit-shape-16",
+      "asset": "regular/bezier-curve.svg"
+    },
+    "Eject": {
+      "value": "eject-16",
+      "asset": "regular/eject.svg"
+    },
+    "Ellipsis": {
+      "value": "ellipsis-16",
+      "asset": "regular/dots-three.svg"
+    },
+    "EllipsisVertical": {
+      "value": "ellipsis-vertical-16",
+      "asset": "regular/dots-three-vertical.svg"
+    },
+    "Emoji": {
+      "value": "emoji-16",
+      "asset": "regular/smiley.svg"
+    },
+    "EmojiSad": {
+      "value": "emoji-sad-16",
+      "asset": "regular/smiley-sad.svg"
+    },
+    "Envelope": {
+      "value": "envelope-16",
+      "asset": "regular/envelope.svg"
+    },
+    "Eraser": {
+      "value": "eraser-16",
+      "asset": "regular/eraser.svg"
+    },
+    "ExclamationMark": {
+      "value": "important-01-16",
+      "asset": "regular/warning-circle.svg"
+    },
+    "Exclamationmark": {
+      "value": "exclamationmark-16",
+      "asset": "regular/exclamation-mark.svg"
+    },
+    "Exclamationmark2": {
+      "value": "exclamationmark-2-16",
+      "asset": "custom/exclamation-two.svg"
+    },
+    "Exclamationmark3": {
+      "value": "exclamationmark-3-16",
+      "asset": "custom/exclamation-three.svg"
+    },
+    "Eye": {
+      "value": "eye-16",
+      "asset": "regular/eye.svg"
+    },
+    "EyeDisabled": {
+      "value": "eye-disabled-16",
+      "asset": "regular/eye-slash.svg"
+    },
+    "EyeDropper": {
+      "value": "eye-dropper-16",
+      "asset": "regular/eyedropper.svg"
+    },
+    "Female": {
+      "value": "female-16",
+      "asset": "regular/gender-female.svg"
+    },
+    "FilmStrip": {
+      "value": "film-strip-16",
+      "asset": "regular/film-strip.svg"
+    },
+    "Filter": {
+      "value": "filter-16",
+      "asset": "regular/funnel.svg"
+    },
+    "Finder": {
+      "value": "finder-16",
+      "asset": "regular/folder-open.svg"
+    },
+    "Fingerprint": {
+      "value": "fingerprint-16",
+      "asset": "regular/fingerprint.svg"
+    },
+    "Flag": {
+      "value": "flag-16",
+      "asset": "regular/flag.svg"
+    },
+    "Folder": {
+      "value": "folder-16",
+      "asset": "regular/folder.svg"
+    },
+    "Footprints": {
+      "value": "footprints-16",
+      "asset": "regular/footprints.svg"
+    },
+    "Forward": {
+      "value": "forward-16",
+      "asset": "regular/fast-forward.svg"
+    },
+    "ForwardFilled": {
+      "value": "forward-filled-16",
+      "asset": "fill/fast-forward.svg"
+    },
+    "FountainTip": {
+      "value": "fountain-tip-16",
+      "asset": "regular/pen-nib.svg"
+    },
+    "FullSignal": {
+      "value": "full-signal-16",
+      "asset": "regular/cell-signal-full.svg"
+    },
+    "GameController": {
+      "value": "game-controller-16",
+      "asset": "regular/game-controller.svg"
+    },
+    "Gauge": {
+      "value": "gauge-16",
+      "asset": "regular/gauge.svg"
+    },
+    "Gear": {
+      "value": "cog-16",
+      "asset": "regular/gear.svg"
+    },
+    "Geopin": {
+      "value": "geopin-16",
+      "asset": "regular/map-pin.svg"
+    },
+    "Germ": {
+      "value": "germ-16",
+      "asset": "regular/virus.svg"
+    },
+    "Gift": {
+      "value": "gift-16",
+      "asset": "regular/gift.svg"
+    },
+    "Glasses": {
+      "value": "glasses-16",
+      "asset": "regular/eyeglasses.svg"
+    },
+    "Globe": {
+      "value": "globe-01-16",
+      "asset": "regular/globe.svg"
+    },
+    "Goal": {
+      "value": "goal-16",
+      "asset": "regular/flag-checkered.svg"
+    },
+    "Hammer": {
+      "value": "hammer-16",
+      "asset": "regular/hammer.svg"
+    },
+    "HardDrive": {
+      "value": "hard-drive-16",
+      "asset": "regular/hard-drive.svg"
+    },
+    "Hashtag": {
+      "value": "hashtag-16",
+      "asset": "regular/hash.svg"
+    },
+    "Heading": {
+      "value": "heading-16",
+      "asset": "regular/text-h.svg"
+    },
+    "Headphones": {
+      "value": "headphones-16",
+      "asset": "regular/headphones.svg"
+    },
+    "Heart": {
+      "value": "heart-16",
+      "asset": "regular/heart.svg"
+    },
+    "HeartDisabled": {
+      "value": "heart-disabled-16",
+      "asset": "custom/heart-slash.svg"
+    },
+    "Heartbeat": {
+      "value": "heartbeat-16",
+      "asset": "regular/heartbeat.svg"
+    },
+    "Highlight": {
+      "value": "highlight-16",
+      "asset": "regular/highlighter.svg"
+    },
+    "Hourglass": {
+      "value": "hourglass-16",
+      "asset": "regular/hourglass.svg"
+    },
+    "House": {
+      "value": "house-16",
+      "asset": "regular/house.svg"
+    },
+    "Humidity": {
+      "value": "humidity-16",
+      "asset": "custom/humidity.svg"
+    },
+    "Image": {
+      "value": "image-16",
+      "asset": "regular/image.svg"
+    },
+    "Important": {
+      "value": "important-01-16",
+      "asset": "regular/warning-circle.svg"
+    },
+    "Info": {
+      "value": "info-01-16",
+      "asset": "regular/info.svg"
+    },
+    "Italics": {
+      "value": "italics-16",
+      "asset": "regular/text-italic.svg"
+    },
+    "Key": {
+      "value": "key-16",
+      "asset": "regular/key.svg"
+    },
+    "Keyboard": {
+      "value": "keyboard-16",
+      "asset": "regular/keyboard.svg"
+    },
+    "Layers": {
+      "value": "layers-16",
+      "asset": "regular/stack.svg"
+    },
+    "Leaderboard": {
+      "value": "leaderboard-16",
+      "asset": "regular/ranking.svg"
+    },
+    "Leaf": {
+      "value": "leaf-16",
+      "asset": "regular/leaf.svg"
+    },
+    "LevelMeter": {
+      "value": "signal-2-16",
+      "asset": "regular/cell-signal-medium.svg"
+    },
+    "LightBulb": {
+      "value": "light-bulb-16",
+      "asset": "regular/lightbulb.svg"
+    },
+    "LightBulbOff": {
+      "value": "light-bulb-off-16",
+      "asset": "custom/lightbulb-off.svg"
+    },
+    "LineChart": {
+      "value": "line-chart-16",
+      "asset": "regular/chart-line.svg"
+    },
+    "Link": {
+      "value": "link-16",
+      "asset": "regular/link.svg"
+    },
+    "List": {
+      "value": "app-window-list-16",
+      "asset": "custom/window-list.svg"
+    },
+    "Livestream": {
+      "value": "livestream-01-16",
+      "asset": "regular/broadcast.svg"
+    },
+    "LivestreamDisabled": {
+      "value": "livestream-disabled-01-16",
+      "asset": "custom/broadcast-slash.svg"
+    },
+    "Lock": {
+      "value": "lock-16",
+      "asset": "regular/lock.svg"
+    },
+    "LockDisabled": {
+      "value": "lock-disabled-16",
+      "asset": "custom/lock-slash.svg"
+    },
+    "LockUnlocked": {
+      "value": "lock-unlocked-16",
+      "asset": "regular/lock-open.svg"
+    },
+    "Logout": {
+      "value": "logout-16",
+      "asset": "regular/sign-out.svg"
+    },
+    "Lorry": {
+      "value": "lorry-16",
+      "asset": "regular/truck.svg"
+    },
+    "Lowercase": {
+      "value": "lowercase-16",
+      "asset": "custom/lowercase.svg"
+    },
+    "MagnifyingGlass": {
+      "value": "magnifying-glass-16",
+      "asset": "regular/magnifying-glass.svg"
+    },
+    "Male": {
+      "value": "male-16",
+      "asset": "regular/gender-male.svg"
+    },
+    "Map": {
+      "value": "map-16",
+      "asset": "regular/map-trifold.svg"
+    },
+    "Mask": {
+      "value": "mask-16",
+      "asset": "regular/face-mask.svg"
+    },
+    "Maximize": {
+      "value": "maximize-16",
+      "asset": "regular/corners-out.svg"
+    },
+    "MedicalSupport": {
+      "value": "medical-support-16",
+      "asset": "regular/first-aid-kit.svg"
+    },
+    "Megaphone": {
+      "value": "megaphone-16",
+      "asset": "regular/megaphone.svg"
+    },
+    "MemoryChip": {
+      "value": "computer-chip-16",
+      "asset": "regular/cpu.svg"
+    },
+    "MemoryStick": {
+      "value": "memory-stick-16",
+      "asset": "regular/memory.svg"
+    },
+    "Message": {
+      "value": "speech-bubble-16",
+      "asset": "regular/chat.svg"
+    },
+    "Microphone": {
+      "value": "microphone-16",
+      "asset": "regular/microphone.svg"
+    },
+    "MicrophoneDisabled": {
+      "value": "microphone-disabled-16",
+      "asset": "regular/microphone-slash.svg"
+    },
+    "Minimize": {
+      "value": "minimize-16",
+      "asset": "regular/corners-in.svg"
+    },
+    "Minus": {
+      "value": "minus-16",
+      "asset": "regular/minus.svg"
+    },
+    "MinusCircle": {
+      "value": "minus-circle-16",
+      "asset": "regular/minus-circle.svg"
+    },
+    "MinusCircleFilled": {
+      "value": "minus-circle-filled-16",
+      "asset": "fill/minus-circle.svg"
+    },
+    "Mobile": {
+      "value": "mobile-16",
+      "asset": "regular/device-mobile.svg"
+    },
+    "Monitor": {
+      "value": "monitor-16",
+      "asset": "regular/monitor.svg"
+    },
+    "Moon": {
+      "value": "moon-16",
+      "asset": "regular/moon.svg"
+    },
+    "MoonDown": {
+      "value": "moon-down-16",
+      "asset": "custom/moon-down.svg"
+    },
+    "MoonUp": {
+      "value": "moon-up-16",
+      "asset": "custom/moon-up.svg"
+    },
+    "Moonrise": {
+      "value": "moonrise-16",
+      "asset": "custom/moonrise.svg"
+    },
+    "Mountain": {
+      "value": "mountain-16",
+      "asset": "regular/mountains.svg"
+    },
+    "Mouse": {
+      "value": "mouse-16",
+      "asset": "regular/mouse.svg"
+    },
+    "Move": {
+      "value": "move-16",
+      "asset": "regular/arrows-out-cardinal.svg"
+    },
+    "Mug": {
+      "value": "mug-16",
+      "asset": "custom/mug.svg"
+    },
+    "MugSteam": {
+      "value": "mug-steam-16",
+      "asset": "regular/coffee.svg"
+    },
+    "Multiply": {
+      "value": "multiply-16",
+      "asset": "regular/x.svg"
+    },
+    "Music": {
+      "value": "music-16",
+      "asset": "regular/music-notes.svg"
+    },
+    "Network": {
+      "value": "network-16",
+      "asset": "regular/network.svg"
+    },
+    "NewDocument": {
+      "value": "new-document-16",
+      "asset": "regular/file-plus.svg"
+    },
+    "NewFolder": {
+      "value": "new-folder-16",
+      "asset": "regular/folder-plus.svg"
+    },
+    "Number00": {
+      "value": "number-00-16",
+      "asset": "custom/number-00.svg"
+    },
+    "Number01": {
+      "value": "number-01-16",
+      "asset": "custom/number-01.svg"
+    },
+    "Number02": {
+      "value": "number-02-16",
+      "asset": "custom/number-02.svg"
+    },
+    "Number03": {
+      "value": "number-03-16",
+      "asset": "custom/number-03.svg"
+    },
+    "Number04": {
+      "value": "number-04-16",
+      "asset": "custom/number-04.svg"
+    },
+    "Number05": {
+      "value": "number-05-16",
+      "asset": "custom/number-05.svg"
+    },
+    "Number06": {
+      "value": "number-06-16",
+      "asset": "custom/number-06.svg"
+    },
+    "Number07": {
+      "value": "number-07-16",
+      "asset": "custom/number-07.svg"
+    },
+    "Number08": {
+      "value": "number-08-16",
+      "asset": "custom/number-08.svg"
+    },
+    "Number09": {
+      "value": "number-09-16",
+      "asset": "custom/number-09.svg"
+    },
+    "Number10": {
+      "value": "number-10-16",
+      "asset": "custom/number-10.svg"
+    },
+    "Number11": {
+      "value": "number-11-16",
+      "asset": "custom/number-11.svg"
+    },
+    "Number12": {
+      "value": "number-12-16",
+      "asset": "custom/number-12.svg"
+    },
+    "Number13": {
+      "value": "number-13-16",
+      "asset": "custom/number-13.svg"
+    },
+    "Number14": {
+      "value": "number-14-16",
+      "asset": "custom/number-14.svg"
+    },
+    "Number15": {
+      "value": "number-15-16",
+      "asset": "custom/number-15.svg"
+    },
+    "Number16": {
+      "value": "number-16-16",
+      "asset": "custom/number-16.svg"
+    },
+    "Number17": {
+      "value": "number-17-16",
+      "asset": "custom/number-17.svg"
+    },
+    "Number18": {
+      "value": "number-18-16",
+      "asset": "custom/number-18.svg"
+    },
+    "Number19": {
+      "value": "number-19-16",
+      "asset": "custom/number-19.svg"
+    },
+    "Number20": {
+      "value": "number-20-16",
+      "asset": "custom/number-20.svg"
+    },
+    "Number21": {
+      "value": "number-21-16",
+      "asset": "custom/number-21.svg"
+    },
+    "Number22": {
+      "value": "number-22-16",
+      "asset": "custom/number-22.svg"
+    },
+    "Number23": {
+      "value": "number-23-16",
+      "asset": "custom/number-23.svg"
+    },
+    "Number24": {
+      "value": "number-24-16",
+      "asset": "custom/number-24.svg"
+    },
+    "Number25": {
+      "value": "number-25-16",
+      "asset": "custom/number-25.svg"
+    },
+    "Number26": {
+      "value": "number-26-16",
+      "asset": "custom/number-26.svg"
+    },
+    "Number27": {
+      "value": "number-27-16",
+      "asset": "custom/number-27.svg"
+    },
+    "Number28": {
+      "value": "number-28-16",
+      "asset": "custom/number-28.svg"
+    },
+    "Number29": {
+      "value": "number-29-16",
+      "asset": "custom/number-29.svg"
+    },
+    "Number30": {
+      "value": "number-30-16",
+      "asset": "custom/number-30.svg"
+    },
+    "Number31": {
+      "value": "number-31-16",
+      "asset": "custom/number-31.svg"
+    },
+    "Number32": {
+      "value": "number-32-16",
+      "asset": "custom/number-32.svg"
+    },
+    "Number33": {
+      "value": "number-33-16",
+      "asset": "custom/number-33.svg"
+    },
+    "Number34": {
+      "value": "number-34-16",
+      "asset": "custom/number-34.svg"
+    },
+    "Number35": {
+      "value": "number-35-16",
+      "asset": "custom/number-35.svg"
+    },
+    "Number36": {
+      "value": "number-36-16",
+      "asset": "custom/number-36.svg"
+    },
+    "Number37": {
+      "value": "number-37-16",
+      "asset": "custom/number-37.svg"
+    },
+    "Number38": {
+      "value": "number-38-16",
+      "asset": "custom/number-38.svg"
+    },
+    "Number39": {
+      "value": "number-39-16",
+      "asset": "custom/number-39.svg"
+    },
+    "Number40": {
+      "value": "number-40-16",
+      "asset": "custom/number-40.svg"
+    },
+    "Number41": {
+      "value": "number-41-16",
+      "asset": "custom/number-41.svg"
+    },
+    "Number42": {
+      "value": "number-42-16",
+      "asset": "custom/number-42.svg"
+    },
+    "Number43": {
+      "value": "number-43-16",
+      "asset": "custom/number-43.svg"
+    },
+    "Number44": {
+      "value": "number-44-16",
+      "asset": "custom/number-44.svg"
+    },
+    "Number45": {
+      "value": "number-45-16",
+      "asset": "custom/number-45.svg"
+    },
+    "Number46": {
+      "value": "number-46-16",
+      "asset": "custom/number-46.svg"
+    },
+    "Number47": {
+      "value": "number-47-16",
+      "asset": "custom/number-47.svg"
+    },
+    "Number48": {
+      "value": "number-48-16",
+      "asset": "custom/number-48.svg"
+    },
+    "Number49": {
+      "value": "number-49-16",
+      "asset": "custom/number-49.svg"
+    },
+    "Number50": {
+      "value": "number-50-16",
+      "asset": "custom/number-50.svg"
+    },
+    "Number51": {
+      "value": "number-51-16",
+      "asset": "custom/number-51.svg"
+    },
+    "Number52": {
+      "value": "number-52-16",
+      "asset": "custom/number-52.svg"
+    },
+    "Number53": {
+      "value": "number-53-16",
+      "asset": "custom/number-53.svg"
+    },
+    "Number54": {
+      "value": "number-54-16",
+      "asset": "custom/number-54.svg"
+    },
+    "Number55": {
+      "value": "number-55-16",
+      "asset": "custom/number-55.svg"
+    },
+    "Number56": {
+      "value": "number-56-16",
+      "asset": "custom/number-56.svg"
+    },
+    "Number57": {
+      "value": "number-57-16",
+      "asset": "custom/number-57.svg"
+    },
+    "Number58": {
+      "value": "number-58-16",
+      "asset": "custom/number-58.svg"
+    },
+    "Number59": {
+      "value": "number-59-16",
+      "asset": "custom/number-59.svg"
+    },
+    "Number60": {
+      "value": "number-60-16",
+      "asset": "custom/number-60.svg"
+    },
+    "Number61": {
+      "value": "number-61-16",
+      "asset": "custom/number-61.svg"
+    },
+    "Number62": {
+      "value": "number-62-16",
+      "asset": "custom/number-62.svg"
+    },
+    "Number63": {
+      "value": "number-63-16",
+      "asset": "custom/number-63.svg"
+    },
+    "Number64": {
+      "value": "number-64-16",
+      "asset": "custom/number-64.svg"
+    },
+    "Number65": {
+      "value": "number-65-16",
+      "asset": "custom/number-65.svg"
+    },
+    "Number66": {
+      "value": "number-66-16",
+      "asset": "custom/number-66.svg"
+    },
+    "Number67": {
+      "value": "number-67-16",
+      "asset": "custom/number-67.svg"
+    },
+    "Number68": {
+      "value": "number-68-16",
+      "asset": "custom/number-68.svg"
+    },
+    "Number69": {
+      "value": "number-69-16",
+      "asset": "custom/number-69.svg"
+    },
+    "Number70": {
+      "value": "number-70-16",
+      "asset": "custom/number-70.svg"
+    },
+    "Number71": {
+      "value": "number-71-16",
+      "asset": "custom/number-71.svg"
+    },
+    "Number72": {
+      "value": "number-72-16",
+      "asset": "custom/number-72.svg"
+    },
+    "Number73": {
+      "value": "number-73-16",
+      "asset": "custom/number-73.svg"
+    },
+    "Number74": {
+      "value": "number-74-16",
+      "asset": "custom/number-74.svg"
+    },
+    "Number75": {
+      "value": "number-75-16",
+      "asset": "custom/number-75.svg"
+    },
+    "Number76": {
+      "value": "number-76-16",
+      "asset": "custom/number-76.svg"
+    },
+    "Number77": {
+      "value": "number-77-16",
+      "asset": "custom/number-77.svg"
+    },
+    "Number78": {
+      "value": "number-78-16",
+      "asset": "custom/number-78.svg"
+    },
+    "Number79": {
+      "value": "number-79-16",
+      "asset": "custom/number-79.svg"
+    },
+    "Number80": {
+      "value": "number-80-16",
+      "asset": "custom/number-80.svg"
+    },
+    "Number81": {
+      "value": "number-81-16",
+      "asset": "custom/number-81.svg"
+    },
+    "Number82": {
+      "value": "number-82-16",
+      "asset": "custom/number-82.svg"
+    },
+    "Number83": {
+      "value": "number-83-16",
+      "asset": "custom/number-83.svg"
+    },
+    "Number84": {
+      "value": "number-84-16",
+      "asset": "custom/number-84.svg"
+    },
+    "Number85": {
+      "value": "number-85-16",
+      "asset": "custom/number-85.svg"
+    },
+    "Number86": {
+      "value": "number-86-16",
+      "asset": "custom/number-86.svg"
+    },
+    "Number87": {
+      "value": "number-87-16",
+      "asset": "custom/number-87.svg"
+    },
+    "Number88": {
+      "value": "number-88-16",
+      "asset": "custom/number-88.svg"
+    },
+    "Number89": {
+      "value": "number-89-16",
+      "asset": "custom/number-89.svg"
+    },
+    "Number90": {
+      "value": "number-90-16",
+      "asset": "custom/number-90.svg"
+    },
+    "Number91": {
+      "value": "number-91-16",
+      "asset": "custom/number-91.svg"
+    },
+    "Number92": {
+      "value": "number-92-16",
+      "asset": "custom/number-92.svg"
+    },
+    "Number93": {
+      "value": "number-93-16",
+      "asset": "custom/number-93.svg"
+    },
+    "Number94": {
+      "value": "number-94-16",
+      "asset": "custom/number-94.svg"
+    },
+    "Number95": {
+      "value": "number-95-16",
+      "asset": "custom/number-95.svg"
+    },
+    "Number96": {
+      "value": "number-96-16",
+      "asset": "custom/number-96.svg"
+    },
+    "Number97": {
+      "value": "number-97-16",
+      "asset": "custom/number-97.svg"
+    },
+    "Number98": {
+      "value": "number-98-16",
+      "asset": "custom/number-98.svg"
+    },
+    "Number99": {
+      "value": "number-99-16",
+      "asset": "custom/number-99.svg"
+    },
+    "NumberList": {
+      "value": "number-list-16",
+      "asset": "regular/list-numbers.svg"
+    },
+    "Paperclip": {
+      "value": "paperclip-16",
+      "asset": "regular/paperclip.svg"
+    },
+    "Paragraph": {
+      "value": "paragraph-16",
+      "asset": "regular/paragraph.svg"
+    },
+    "Patch": {
+      "value": "patch-16",
+      "asset": "custom/patch.svg"
+    },
+    "Pause": {
+      "value": "pause-16",
+      "asset": "regular/pause.svg"
+    },
+    "PauseFilled": {
+      "value": "pause-filled-16",
+      "asset": "fill/pause.svg"
+    },
+    "Pencil": {
+      "value": "pencil-16",
+      "asset": "regular/pencil.svg"
+    },
+    "Person": {
+      "value": "person-16",
+      "asset": "regular/user.svg"
+    },
+    "PersonCircle": {
+      "value": "person-circle-16",
+      "asset": "regular/user-circle.svg"
+    },
+    "PersonLines": {
+      "value": "person-lines-16",
+      "asset": "regular/user-list.svg"
+    },
+    "Phone": {
+      "value": "phone-16",
+      "asset": "regular/phone.svg"
+    },
+    "PhoneRinging": {
+      "value": "phone-ringing-16",
+      "asset": "regular/phone-call.svg"
+    },
+    "PieChart": {
+      "value": "pie-chart-16",
+      "asset": "regular/chart-pie.svg"
+    },
+    "Pill": {
+      "value": "pill-16",
+      "asset": "regular/pill.svg"
+    },
+    "Pin": {
+      "value": "pin-16",
+      "asset": "regular/push-pin.svg"
+    },
+    "PinDisabled": {
+      "value": "pin-disabled-16",
+      "asset": "regular/push-pin-slash.svg"
+    },
+    "Play": {
+      "value": "play-16",
+      "asset": "regular/play.svg"
+    },
+    "PlayFilled": {
+      "value": "play-filled-16",
+      "asset": "fill/play.svg"
+    },
+    "Plug": {
+      "value": "plug-16",
+      "asset": "regular/plug.svg"
+    },
+    "Plus": {
+      "value": "plus-16",
+      "asset": "regular/plus.svg"
+    },
+    "PlusCircle": {
+      "value": "plus-circle-16",
+      "asset": "regular/plus-circle.svg"
+    },
+    "PlusCircleFilled": {
+      "value": "plus-circle-filled-16",
+      "asset": "fill/plus-circle.svg"
+    },
+    "PlusMinusDivideMultiply": {
+      "value": "plus-minus-divide-multiply-16",
+      "asset": "regular/math-operations.svg"
+    },
+    "PlusSquare": {
+      "value": "plus-square-16",
+      "asset": "regular/plus-square.svg"
+    },
+    "PlusTopRightSquare": {
+      "value": "plus-top-right-square-16",
+      "asset": "custom/square-plus-corner.svg"
+    },
+    "Power": {
+      "value": "power-16",
+      "asset": "regular/power.svg"
+    },
+    "Print": {
+      "value": "print-16",
+      "asset": "regular/printer.svg"
+    },
+    "QuestionMark": {
+      "value": "question-mark-circle-16",
+      "asset": "regular/question.svg"
+    },
+    "QuestionMarkCircle": {
+      "value": "question-mark-circle-16",
+      "asset": "regular/question.svg"
+    },
+    "Quicklink": {
+      "value": "quicklink-16",
+      "asset": "custom/quicklink.svg"
+    },
+    "QuotationMarks": {
+      "value": "quotation-marks-16",
+      "asset": "regular/quotes.svg"
+    },
+    "QuoteBlock": {
+      "value": "quote-block-16",
+      "asset": "custom/quote-block.svg"
+    },
+    "Racket": {
+      "value": "racket-16",
+      "asset": "regular/racquet.svg"
+    },
+    "Raindrop": {
+      "value": "raindrop-16",
+      "asset": "regular/drop.svg"
+    },
+    "RaycastLogoNeg": {
+      "value": "raycast-logo-neg-16",
+      "asset": "custom/launcher-negative.svg"
+    },
+    "RaycastLogoPos": {
+      "value": "raycast-logo-pos-16",
+      "asset": "custom/launcher-positive.svg"
+    },
+    "Receipt": {
+      "value": "receipt-16",
+      "asset": "regular/receipt.svg"
+    },
+    "Redo": {
+      "value": "redo-16",
+      "asset": "regular/arrow-u-up-right.svg"
+    },
+    "RemovePerson": {
+      "value": "remove-person-16",
+      "asset": "regular/user-minus.svg"
+    },
+    "Repeat": {
+      "value": "repeat-16",
+      "asset": "regular/repeat.svg"
+    },
+    "Replace": {
+      "value": "replace-16",
+      "asset": "regular/swap.svg"
+    },
+    "ReplaceOne": {
+      "value": "replace-one-16",
+      "asset": "custom/replace-one.svg"
+    },
+    "Reply": {
+      "value": "reply-16",
+      "asset": "regular/arrow-bend-up-left.svg"
+    },
+    "Rewind": {
+      "value": "rewind-16",
+      "asset": "regular/rewind.svg"
+    },
+    "RewindFilled": {
+      "value": "rewind-filled-16",
+      "asset": "fill/rewind.svg"
+    },
+    "Rocket": {
+      "value": "rocket-16",
+      "asset": "regular/rocket.svg"
+    },
+    "Rosette": {
+      "value": "rosette-16",
+      "asset": "regular/seal.svg"
+    },
+    "RotateAntiClockwise": {
+      "value": "rotate-anti-clockwise-16",
+      "asset": "custom/rotate-counter-clockwise.svg"
+    },
+    "RotateClockwise": {
+      "value": "rotate-clockwise-16",
+      "asset": "custom/rotate-clockwise.svg"
+    },
+    "Rss": {
+      "value": "rss-16",
+      "asset": "regular/rss.svg"
+    },
+    "Ruler": {
+      "value": "ruler-16",
+      "asset": "regular/ruler.svg"
+    },
+    "SaveDocument": {
+      "value": "save-document-16",
+      "asset": "regular/floppy-disk.svg"
+    },
+    "Shield": {
+      "value": "shield-01-16",
+      "asset": "regular/shield.svg"
+    },
+    "ShortParagraph": {
+      "value": "short-paragraph-16",
+      "asset": "custom/short-paragraph.svg"
+    },
+    "Shuffle": {
+      "value": "shuffle-16",
+      "asset": "regular/shuffle.svg"
+    },
+    "Sidebar": {
+      "value": "app-window-sidebar-right-16",
+      "asset": "custom/sidebar-right.svg"
+    },
+    "Signal0": {
+      "value": "signal-0-16",
+      "asset": "regular/cell-signal-none.svg"
+    },
+    "Signal1": {
+      "value": "signal-1-16",
+      "asset": "regular/cell-signal-low.svg"
+    },
+    "Signal2": {
+      "value": "signal-2-16",
+      "asset": "regular/cell-signal-medium.svg"
+    },
+    "Signal3": {
+      "value": "signal-3-16",
+      "asset": "regular/cell-signal-high.svg"
+    },
+    "Snippets": {
+      "value": "snippets-16",
+      "asset": "regular/brackets-curly.svg"
+    },
+    "Snowflake": {
+      "value": "snowflake-16",
+      "asset": "regular/snowflake.svg"
+    },
+    "SoccerBall": {
+      "value": "soccer-ball-16",
+      "asset": "regular/soccer-ball.svg"
+    },
+    "Speaker": {
+      "value": "speaker-16",
+      "asset": "regular/speaker-hifi.svg"
+    },
+    "SpeakerDown": {
+      "value": "speaker-down-16",
+      "asset": "custom/speaker-down.svg"
+    },
+    "SpeakerHigh": {
+      "value": "speaker-high-16",
+      "asset": "regular/speaker-high.svg"
+    },
+    "SpeakerLow": {
+      "value": "speaker-low-16",
+      "asset": "regular/speaker-low.svg"
+    },
+    "SpeakerOff": {
+      "value": "speaker-off-16",
+      "asset": "regular/speaker-slash.svg"
+    },
+    "SpeakerOn": {
+      "value": "speaker-on-16",
+      "asset": "regular/speaker-none.svg"
+    },
+    "SpeakerUp": {
+      "value": "speaker-up-16",
+      "asset": "custom/speaker-up.svg"
+    },
+    "SpeechBubble": {
+      "value": "speech-bubble-16",
+      "asset": "regular/chat.svg"
+    },
+    "SpeechBubbleActive": {
+      "value": "speech-bubble-active-16",
+      "asset": "regular/chat-dots.svg"
+    },
+    "SpeechBubbleImportant": {
+      "value": "speech-bubble-important-16",
+      "asset": "custom/chat-important.svg"
+    },
+    "SquareEllipsis": {
+      "value": "square-ellipsis-16",
+      "asset": "custom/square-ellipsis.svg"
+    },
+    "StackedBars1": {
+      "value": "stacked-bars-1-16",
+      "asset": "custom/stacked-bars-1.svg"
+    },
+    "StackedBars2": {
+      "value": "stacked-bars-2-16",
+      "asset": "custom/stacked-bars-2.svg"
+    },
+    "StackedBars3": {
+      "value": "stacked-bars-3-16",
+      "asset": "custom/stacked-bars-3.svg"
+    },
+    "StackedBars4": {
+      "value": "stacked-bars-4-16",
+      "asset": "custom/stacked-bars-4.svg"
+    },
+    "Star": {
+      "value": "star-16",
+      "asset": "regular/star.svg"
+    },
+    "StarCircle": {
+      "value": "star-circle-16",
+      "asset": "custom/star-circle.svg"
+    },
+    "StarDisabled": {
+      "value": "star-disabled-16",
+      "asset": "custom/star-slash.svg"
+    },
+    "Stars": {
+      "value": "stars-16",
+      "asset": "regular/sparkle.svg"
+    },
+    "Stop": {
+      "value": "stop-16",
+      "asset": "regular/stop.svg"
+    },
+    "StopFilled": {
+      "value": "stop-filled-16",
+      "asset": "fill/stop.svg"
+    },
+    "Stopwatch": {
+      "value": "stopwatch-16",
+      "asset": "regular/timer.svg"
+    },
+    "Store": {
+      "value": "store-16",
+      "asset": "regular/storefront.svg"
+    },
+    "StrikeThrough": {
+      "value": "strike-through-16",
+      "asset": "regular/text-strikethrough.svg"
+    },
+    "Sun": {
+      "value": "sun-16",
+      "asset": "regular/sun.svg"
+    },
+    "Sunrise": {
+      "value": "sunrise-16",
+      "asset": "regular/sun-horizon.svg"
+    },
+    "Swatch": {
+      "value": "swatch-16",
+      "asset": "regular/swatches.svg"
+    },
+    "Switch": {
+      "value": "switch-16",
+      "asset": "regular/toggle-right.svg"
+    },
+    "Syringe": {
+      "value": "syringe-16",
+      "asset": "regular/syringe.svg"
+    },
+    "Tack": {
+      "value": "tack-16",
+      "asset": "regular/push-pin-simple.svg"
+    },
+    "TackDisabled": {
+      "value": "tack-disabled-16",
+      "asset": "regular/push-pin-simple-slash.svg"
+    },
+    "Tag": {
+      "value": "tag-16",
+      "asset": "regular/tag.svg"
+    },
+    "Temperature": {
+      "value": "temperature-16",
+      "asset": "regular/thermometer.svg"
+    },
+    "TennisBall": {
+      "value": "tennis-ball-16",
+      "asset": "regular/tennis-ball.svg"
+    },
+    "Terminal": {
+      "value": "terminal-16",
+      "asset": "regular/terminal.svg"
+    },
+    "Text": {
+      "value": "text-16",
+      "asset": "regular/text-t.svg"
+    },
+    "TextCursor": {
+      "value": "text-cursor-16",
+      "asset": "regular/cursor-text.svg"
+    },
+    "TextInput": {
+      "value": "text-input-16",
+      "asset": "regular/textbox.svg"
+    },
+    "TextSelection": {
+      "value": "text-selection-16",
+      "asset": "regular/selection.svg"
+    },
+    "ThumbsDown": {
+      "value": "thumbs-down-16",
+      "asset": "regular/thumbs-down.svg"
+    },
+    "ThumbsDownFilled": {
+      "value": "thumbs-down-filled-16",
+      "asset": "fill/thumbs-down.svg"
+    },
+    "ThumbsUp": {
+      "value": "thumbs-up-16",
+      "asset": "regular/thumbs-up.svg"
+    },
+    "ThumbsUpFilled": {
+      "value": "thumbs-up-filled-16",
+      "asset": "fill/thumbs-up.svg"
+    },
+    "Ticket": {
+      "value": "ticket-16",
+      "asset": "regular/ticket.svg"
+    },
+    "Torch": {
+      "value": "torch-16",
+      "asset": "regular/flashlight.svg"
+    },
+    "Train": {
+      "value": "train-16",
+      "asset": "regular/train.svg"
+    },
+    "Trash": {
+      "value": "trash-16",
+      "asset": "regular/trash.svg"
+    },
+    "Tray": {
+      "value": "tray-16",
+      "asset": "regular/tray.svg"
+    },
+    "Tree": {
+      "value": "tree-16",
+      "asset": "regular/tree.svg"
+    },
+    "Trophy": {
+      "value": "trophy-16",
+      "asset": "regular/trophy.svg"
+    },
+    "TwoPeople": {
+      "value": "two-people-16",
+      "asset": "regular/users.svg"
+    },
+    "Umbrella": {
+      "value": "umbrella-16",
+      "asset": "regular/umbrella.svg"
+    },
+    "Underline": {
+      "value": "underline-16",
+      "asset": "regular/text-underline.svg"
+    },
+    "Undo": {
+      "value": "undo-16",
+      "asset": "regular/arrow-u-up-left.svg"
+    },
+    "Upload": {
+      "value": "upload-16",
+      "asset": "regular/upload.svg"
+    },
+    "Uppercase": {
+      "value": "uppercase-16",
+      "asset": "custom/uppercase.svg"
+    },
+    "Video": {
+      "value": "video-16",
+      "asset": "regular/video-camera.svg"
+    },
+    "VideoDisabled": {
+      "value": "video-disabled-16",
+      "asset": "regular/video-camera-slash.svg"
+    },
+    "Wallet": {
+      "value": "wallet-16",
+      "asset": "regular/wallet.svg"
+    },
+    "Wand": {
+      "value": "wand-16",
+      "asset": "regular/magic-wand.svg"
+    },
+    "Warning": {
+      "value": "warning-16",
+      "asset": "regular/warning.svg"
+    },
+    "Waveform": {
+      "value": "waveform-16",
+      "asset": "regular/waveform.svg"
+    },
+    "Weights": {
+      "value": "weights-16",
+      "asset": "regular/barbell.svg"
+    },
+    "Wifi": {
+      "value": "wifi-16",
+      "asset": "regular/wifi-high.svg"
+    },
+    "WifiDisabled": {
+      "value": "wifi-disabled-16",
+      "asset": "regular/wifi-slash.svg"
+    },
+    "Wind": {
+      "value": "wind-16",
+      "asset": "regular/wind.svg"
+    },
+    "Window": {
+      "value": "app-window-16",
+      "asset": "regular/app-window.svg"
+    },
+    "Windsock": {
+      "value": "windsock-16",
+      "asset": "custom/windsock.svg"
+    },
+    "WrenchScrewdriver": {
+      "value": "wrench-screwdriver-16",
+      "asset": "custom/wrench-screwdriver.svg"
+    },
+    "WristWatch": {
+      "value": "wrist-watch-16",
+      "asset": "regular/watch.svg"
+    },
+    "XMarkCircle": {
+      "value": "x-mark-circle-16",
+      "asset": "regular/x-circle.svg"
+    },
+    "XMarkCircleFilled": {
+      "value": "x-mark-circle-filled-16",
+      "asset": "fill/x-circle.svg"
+    },
+    "XMarkCircleHalfDash": {
+      "value": "x-mark-circle-half-dash-16",
+      "asset": "custom/x-circle-half-dash.svg"
+    },
+    "XMarkTopRightSquare": {
+      "value": "x-mark-top-right-square-16",
+      "asset": "custom/square-x-corner.svg"
+    },
+    "Xmark": {
+      "value": "xmark-16",
+      "asset": "regular/x.svg"
+    },
+    "TwoArrowsClockwise": {
+      "value": "arrow-clockwise-16",
+      "asset": "regular/arrow-clockwise.svg"
+    },
+    "EyeSlash": {
+      "value": "eye-disabled-16",
+      "asset": "regular/eye-slash.svg"
+    },
+    "SpeakerArrowDown": {
+      "value": "speaker-down-16",
+      "asset": "custom/speaker-down.svg"
+    },
+    "SpeakerArrowUp": {
+      "value": "speaker-up-16",
+      "asset": "custom/speaker-up.svg"
+    },
+    "SpeakerSlash": {
+      "value": "speaker-off-16",
+      "asset": "regular/speaker-slash.svg"
+    },
+    "TextDocument": {
+      "value": "blank-document-16",
+      "asset": "regular/file.svg"
+    },
+    "XmarkCircle": {
+      "value": "x-mark-circle-16",
+      "asset": "regular/x-circle.svg"
+    },
+    "Search": {
+      "value": null,
+      "asset": "regular/magnifying-glass.svg"
+    },
+    "StarFilled": {
+      "value": null,
+      "asset": "fill/star.svg"
+    },
+    "HeartFilled": {
+      "value": null,
+      "asset": "fill/heart.svg"
+    },
+    "Gearshape": {
+      "value": null,
+      "asset": "regular/gear.svg"
+    },
+    "Hash": {
+      "value": null,
+      "asset": "regular/hash.svg"
+    },
+    "Grid": {
+      "value": null,
+      "asset": "regular/grid-four.svg"
+    },
+    "Photo": {
+      "value": null,
+      "asset": "regular/image.svg"
+    },
+    "XMark": {
+      "value": null,
+      "asset": "regular/x.svg"
+    },
+    "ColorWheel": {
+      "value": null,
+      "asset": "regular/palette.svg"
+    },
+    "ArrowUpLeft": {
+      "value": null,
+      "asset": "regular/arrow-up-left.svg"
+    },
+    "ArrowUpRight": {
+      "value": null,
+      "asset": "regular/arrow-up-right.svg"
+    },
+    "ArrowDownLeft": {
+      "value": null,
+      "asset": "regular/arrow-down-left.svg"
+    },
+    "ArrowDownRight": {
+      "value": null,
+      "asset": "regular/arrow-down-right.svg"
+    }
+  }
+}

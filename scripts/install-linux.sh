@@ -1,10 +1,41 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$HOME/.cargo/bin:${PATH:-/usr/local/bin:/usr/bin:/bin}"
+
+fail() {
+  printf 'Command Space installation: %s\n' "$*" >&2
+  exit 1
+}
+
+for dependency in bash node npm python3 flock rsync systemctl systemd-run update-desktop-database dirname install mkdir mv ln chmod cat sleep; do
+  command -v "$dependency" >/dev/null 2>&1 || fail "Missing required command: $dependency. Install it and retry."
+done
 project_dir=$(cd "$(dirname "$0")/.." && pwd)
 cd "$project_dir"
+node_version=$(node --version) || fail 'Could not run Node.js. Check the configured Node installation.'
+if [[ ! "$node_version" =~ ^v([0-9]+)\. ]] || (( BASH_REMATCH[1] < 24 )); then
+  fail "Node.js 24 or newer is required; found $node_version."
+fi
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 12))' || fail 'Python 3.12 or newer is required.'
+systemctl --user show-environment >/dev/null || fail 'The systemd user session is unavailable. Run the installer as your desktop user.'
+[[ -f "$HOME/.config/hypr/hyprland.lua" ]] || fail "Omarchy's Hyprland Lua configuration was not found."
+
 profile=${1:---release}
+case "$profile" in --prebuilt|--debug|--release) ;; *) fail "Unknown installation mode: $profile" ;; esac
+if [[ "$profile" != --prebuilt ]]; then
+  for dependency in cargo nice; do
+    command -v "$dependency" >/dev/null 2>&1 || fail "Missing required command: $dependency. Install Rust and retry."
+  done
+fi
+for file in runtime/host.mjs runtime/package-lock.json scripts/start-daemon.sh; do
+  [[ -f "$file" ]] || fail "The package is incomplete: missing $file."
+done
+[[ -d extensions ]] || fail 'The package is incomplete: missing bundled extensions.'
 if [[ "$profile" == --prebuilt ]]; then
   binary=bin/command-space
+  [[ -x "$binary" ]] || fail 'The package executable is missing or not executable.'
+  [[ -d runtime/node_modules ]] || fail 'The package is incomplete: missing runtime dependencies.'
+  "$binary" --version >/dev/null || fail 'The packaged executable cannot run on this system.'
 elif [[ "$profile" == --debug ]]; then
   nice -n 10 cargo build --bin command-space
   binary=target/debug/command-space
@@ -60,9 +91,12 @@ StartupWMClass=command-space
 DESKTOP
 systemctl --user daemon-reload
 "$HOME/.local/bin/command-space" integration apply
-if [[ ! -d "$install_root/extensions/developer-tools" ]]; then
-  "$HOME/.local/bin/command-space" extension install extensions/developer-tools
-fi
+mkdir -p "$install_root/bundled-extensions"
+rsync -a --delete --exclude node_modules --exclude .git extensions/ "$install_root/bundled-extensions/"
+for bundled in "$install_root/bundled-extensions"/*; do
+  [[ -f "$bundled/package.json" ]] || continue
+  "$HOME/.local/bin/command-space" extension install "$bundled" --replace
+done
 systemctl --user stop command-space-dev.service 2>/dev/null || true
 systemctl --user restart command-space.service
 ready=false

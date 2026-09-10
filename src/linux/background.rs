@@ -54,7 +54,8 @@ impl Worker {
     }
 
     pub fn refresh(&mut self, background: bool) -> Result<(), String> {
-        self.launch(background, Value::Null, Value::Null)
+        self.refresh_at = self.interval.map(|d| Instant::now() + d);
+        self.session.refresh(background)
     }
 
     pub fn launch(
@@ -63,10 +64,19 @@ impl Worker {
         arguments: Value,
         context: Value,
     ) -> Result<(), String> {
+        self.launch_with_fallback(background, arguments, context, None)
+    }
+
+    pub fn launch_with_fallback(
+        &mut self,
+        background: bool,
+        arguments: Value,
+        context: Value,
+        fallback_text: Option<&str>,
+    ) -> Result<(), String> {
         self.refresh_at = self.interval.map(|d| Instant::now() + d);
-        self.session.send(json!({"type":"launch", "extension":extensions::root().join(&self.session.extension),
-            "arguments": arguments, "launchContext": context,
-            "command":self.session.command, "launchType":if background { "background" } else { "userInitiated" }}))
+        self.session
+            .launch(arguments, context, background, fallback_text)
     }
 
     pub fn tick(&mut self) {

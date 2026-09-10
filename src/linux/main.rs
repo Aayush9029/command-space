@@ -8,6 +8,7 @@ mod desktop;
 mod extension_image;
 mod extension_view;
 mod extensions;
+mod focusable;
 mod form_field;
 mod icons;
 mod integration;
@@ -121,8 +122,12 @@ fn main() -> iced::Result {
                 Some("install") => match arguments
                     .get(2)
                     .ok_or("Supply an extension source directory".to_string())
-                    .and_then(|path| extensions::install_location(path, false))
-                {
+                    .and_then(|path| {
+                        extensions::install_location(
+                            path,
+                            arguments.iter().any(|arg| arg == "--replace"),
+                        )
+                    }) {
                     Ok(name) => println!("Installed {name}"),
                     Err(error) => {
                         eprintln!("{error}");
@@ -202,7 +207,14 @@ fn main() -> iced::Result {
         "menu" => {
             match menu::Menu::load() {
                 Ok(mut menu) => {
-                    if route == "dump" {
+                    if route == "provider" {
+                        let route = arguments.get(2).map(String::as_str).unwrap_or("root");
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&menu.provider(&menu.resolve(route)))
+                                .unwrap()
+                        );
+                    } else if route == "dump" {
                         println!("{}", serde_json::to_string_pretty(&menu.items).unwrap());
                     } else {
                         menu.evaluate_conditions();
@@ -260,6 +272,29 @@ fn main() -> iced::Result {
     }
     if matches!(verb, "hide" | "close" | "refresh" | "quit") {
         return Ok(());
+    }
+    if verb != "daemon"
+        && std::env::var_os("WAYLAND_DISPLAY").is_none()
+        && std::env::var_os("DISPLAY").is_none()
+    {
+        let _ = std::process::Command::new("systemctl")
+            .args(["--user", "start", "command-space.service"])
+            .status();
+        for _ in 0..100 {
+            if ipc::send(
+                if is_link { "link" } else { verb },
+                if is_link { verb } else { route },
+            )
+            .is_ok()
+            {
+                return Ok(());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        eprintln!(
+            "The Command Space desktop service is unavailable. Start an Omarchy graphical session and try again."
+        );
+        std::process::exit(1);
     }
     let initial = if is_link {
         Some(format!("link:{verb}"))
