@@ -578,22 +578,9 @@ impl Editor {
                         super::model::Action::Builtin("updates".into()),
                     )))
                     .push(section("Project", colors))
-                    .push(
-                        row![
-                            button("Source code ↗", colors).on_press(Message::Url(
-                                "https://github.com/Aayush9029/command-space".into()
-                            )),
-                            button("RustCast ↗", colors).on_press(Message::Url(
-                                "https://github.com/MystikoLab/rustcast".into()
-                            ))
-                        ]
-                        .spacing(8),
-                    )
-                    .push(
-                        text("Based on RustCast. Distributed under the MIT license.")
-                            .size(12)
-                            .color(colors.muted),
-                    )
+                    .push(button("Source code ↗", colors).on_press(Message::Url(
+                        "https://github.com/Aayush9029/command-space".into(),
+                    )))
                     .push(button("Open configuration", colors).on_press(Message::Run(
                         super::model::Action::Builtin("edit-config".into()),
                     )));

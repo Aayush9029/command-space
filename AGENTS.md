@@ -1,14 +1,13 @@
 # Command Space
 
-Build and test Linux changes inside the Omarchy VM using `scripts/dev.sh`.
-The Mac checkout is synchronized to the guest’s native filesystem for builds.
+Build and test on Omarchy through `scripts/dev.sh`. It syncs this checkout to the VM.
 
-Prefer clear names and self-explanatory code. Add comments only for non-obvious constraints or architectural decisions. Do not add comments, TODO annotations, or change notes to documentation or configuration files.
+Use SSH for development and Safari MCP for browser interaction. Use native UI controls only when authorized.
 
-Use Safari MCP for real browser interaction. Use SSH for guest development and native UI controls for interaction testing.
+Keep names clear and comments limited to non-obvious constraints. Do not add comments or TODOs to docs or config.
 
-When asked to add and push changes, source `~/.oh-my-zsh/custom/dotfiles/zsh/ccm.zsh`, run `ccm`, then `git push`.
+Load Omarchy menus from the installed system. Preserve nested routes, providers, conditions, checked states, and user extensions. Keep MIT attribution in LICENSE.md.
 
-Preserve Omarchy menu definitions, user extensions, nested routes, dynamic providers, conditions, and checked states. Load these from the installed system rather than duplicating the menu. Keep MIT attribution from RustCast.
+The launcher starts at `src/linux/main.rs`. Unit conversion lives in `src/unit_conversion.rs`.
 
-The Linux launcher is `src/linux/main.rs`. The upstream macOS sources remain available for feature parity work. The shared unit conversion implementation is `src/unit_conversion.rs`.
+To publish, source `~/.oh-my-zsh/custom/dotfiles/zsh/ccm.zsh`, run `ccm`, then `git push`.

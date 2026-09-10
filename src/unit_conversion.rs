@@ -1,15 +1,5 @@
 //! Unit conversion parsing and calculation.
 
-#[cfg(target_os = "macos")]
-use crate::{
-    app::{
-        ToApp,
-        apps::{App, AppCommand, AppIcon},
-    },
-    clipboard::ClipBoardContentType,
-    commands::Function,
-};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnitCategory {
     Length,
@@ -241,32 +231,6 @@ const UNITS: &[UnitDef] = &[
         offset: -273.15,
     },
 ];
-
-#[cfg(target_os = "macos")]
-impl ToApp for ConversionResult {
-    fn to_app(&self) -> crate::app::apps::App {
-        let source = format!(
-            "{} {}",
-            format_number(self.source_value),
-            self.source_unit.name
-        );
-        let target = format!(
-            "{} {}",
-            format_number(self.target_value),
-            self.target_unit.name
-        );
-        App {
-            ranking: 0,
-            open_command: AppCommand::Function(Function::CopyToClipboard(
-                ClipBoardContentType::Text(target.clone()),
-            )),
-            desc: source,
-            icons: AppIcon::None,
-            display_name: target,
-            search_name: String::new(),
-        }
-    }
-}
 
 pub fn convert_query(query: &str) -> Option<Vec<ConversionResult>> {
     let parsed = parse_query(query)?;

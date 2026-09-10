@@ -2797,16 +2797,6 @@ impl Launcher {
                 &self.package_selection,
                 colors,
             )
-        } else if self.route == "lemon" {
-            container(
-                widget::image(widget::image::Handle::from_bytes(
-                    include_bytes!("../../assets/macos/RustCast.app/Contents/Resources/lemon.png")
-                        .as_slice(),
-                ))
-                .height(220),
-            )
-            .center(Fill)
-            .into()
         } else if let Some(content) =
             self.extension_view
                 .content(colors, &self.results, self.selected)

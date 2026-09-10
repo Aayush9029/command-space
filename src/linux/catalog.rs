@@ -537,7 +537,6 @@ pub fn is_builtin_route(route: &str) -> bool {
             | "packages"
             | "windows"
             | "running"
-            | "lemon"
             | "updates"
     ) || route.starts_with("mode:")
 }
@@ -605,27 +604,6 @@ fn quick_results(query: &str, config: &Config) -> Vec<Entry> {
             "Stop the launcher",
             "󰅖",
             Action::Builtin("quit".into()),
-        )),
-        "67" => entries.push(Entry::new(
-            "67",
-            "67",
-            "67",
-            "67",
-            Action::Copy("67".into()),
-        )),
-        "zombo" => entries.push(Entry::new(
-            "zombo",
-            "Zombo",
-            "zombo.com",
-            "󰖟",
-            Action::Open("https://zombo.com".into()),
-        )),
-        "lemon" => entries.push(Entry::new(
-            "lemon",
-            "Lemon",
-            "🍋",
-            "🍋",
-            Action::Builtin("lemon".into()),
         )),
         _ => {}
     }
