@@ -9,11 +9,14 @@ import {promisify} from "node:util";
 
 assert.ok(process.versions.bun, "Run this validator with Bun");
 const run = promisify(execFile);
+const fixture = name => fileURLToPath(new URL(`fixtures/installer/${name}`, import.meta.url));
 const archive = path.resolve(process.argv[2]);
 const name = path.basename(archive);
 const [, version, architecture] = /^super-space-(\d+\.\d+\.\d+)-linux-(aarch64|x86_64)\.tar\.gz$/.exec(name) || [];
 assert.ok(version, "Supply a Linux release archive");
 const installer = fileURLToPath(new URL("install.sh", import.meta.url));
+const bootstrap = fileURLToPath(new URL("installer/bootstrap.py", import.meta.url));
+const bootstrapUrl = "https://raw.githubusercontent.com/Aayush9029/super-space/master/scripts/installer/bootstrap.py";
 const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "cs-bootstrap-"));
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 const api = "https://api.github.com/repos/Aayush9029/super-space/releases/latest";
@@ -27,62 +30,24 @@ try {
   await fs.mkdir(bundleRoot);
   await run("python3", [fileURLToPath(new URL("../runtime/unpack-release.py", import.meta.url)), archive, bundleRoot]);
   const bundle = path.join(bundleRoot, "super-space");
-  await fs.writeFile(path.join(bundle, "scripts/install-linux.sh"), `#!/bin/bash
-set -euo pipefail
-[[ "$#" == 1 && "$1" == --prebuilt ]]
-printf 'installed\\n' > "$HOME/install-result"
-printf '%s\\n' "$*" >> "$SUPER_SPACE_BOOTSTRAP_CALLS"
-`);
+  await fs.copyFile(fixture("bootstrap-install.sh"), path.join(bundle, "scripts/install-linux.sh"));
   const fixtureArchive = path.join(temporary, "fixture.tar.gz");
   await run("tar", ["--format=ustar", "--dereference", "--hard-dereference", "-czf", fixtureArchive, "-C", bundleRoot, "super-space"]);
   const validBytes = await fs.readFile(fixtureArchive);
   const maliciousArchive = async kind => {
     const destination = path.join(temporary, `${kind}.tar.gz`);
-    await run("python3", ["-c", `import sys,tarfile,io
-source,destination,kind=sys.argv[1:]
-with tarfile.open(source,'r:gz') as original, tarfile.open(destination,'w:gz',format=tarfile.USTAR_FORMAT) as target:
- for item in original:
-  target.addfile(item,original.extractfile(item) if item.isfile() else None)
- item=tarfile.TarInfo('super-space/extra')
- if kind=='traversal': item.name='super-space/../../escaped'
- if kind=='symlink': item.type=tarfile.SYMTYPE; item.linkname='../../escaped'
- if kind=='hardlink': item.type=tarfile.LNKTYPE; item.linkname='super-space/bin/super-space'
- if kind=='duplicate': item.name='super-space/bin/super-space'
- target.addfile(item,io.BytesIO(b''))
-`, fixtureArchive, destination, kind]);
+    await run("python3", [fixture("malicious-archive.py"), fixtureArchive, destination, kind]);
     return fs.readFile(destination);
   };
   const helpers = path.join(temporary, "helpers");
   await fs.mkdir(helpers);
-  for (const command of ["bash", "python3", "mktemp", "rm", "cat", "mkdir", "install", "mv", "flock", "dirname"]) {
+  for (const command of ["bash", "python3", "sha256sum", "mktemp", "rm", "cat", "mkdir", "install", "mv", "flock", "dirname"]) {
     const {stdout} = await run("/bin/sh", ["-c", 'command -v "$1"', "bootstrap-test", command]);
     await fs.symlink(stdout.trim(), path.join(helpers, command));
   }
-  const python = (await run("/bin/sh", ["-c", "command -v python3"])).stdout.trim();
   const helper = path.join(temporary, "helper.py");
-  await fs.writeFile(helper, `#!${python}
-import json,os,pathlib,shutil,sys
-command=pathlib.Path(sys.argv[0]).name
-args=sys.argv[1:]
-with open(os.environ['SUPER_SPACE_BOOTSTRAP_CALLS'],'a') as log: log.write(json.dumps([command,*args])+'\\n')
-if command=='uname': print(os.environ.get('CS_TEST_OS','Linux') if args==['-s'] else os.environ['CS_TEST_ARCH'])
-elif command=='id': print(os.environ.get('CS_TEST_UID','1000'))
-elif command=='systemctl':
- if os.environ.get('CS_TEST_NO_SESSION'): sys.exit(1)
- print('WAYLAND_DISPLAY=wayland-test')
-elif command=='pacman': sys.exit(1 if os.environ.get('CS_TEST_MISSING_DEPS') else 0)
-elif command=='sudo': sys.exit(99)
-elif command=='curl':
- assert '--proto' in args and args[args.index('--proto')+1]=='=https'
- assert '--proto-redir' in args and args[args.index('--proto-redir')+1]=='=https'
- with open(os.environ['CS_TEST_TRANSPORT']) as source: routes=json.load(source)
- url=args[-1]
- if url not in routes: print('Unexpected download: '+url,file=sys.stderr); sys.exit(22)
- if os.environ.get('CS_TEST_FAILED_DOWNLOAD')==url: sys.exit(22)
- source=routes[url]; target=args[args.index('--output')+1]
- assert pathlib.Path(source).stat().st_size <= int(args[args.index('--max-filesize')+1])
- shutil.copyfile(source,target)
-`, {mode:0o755});
+  await fs.copyFile(fixture("bootstrap-command.py"), helper);
+  await fs.chmod(helper, 0o755);
   for (const command of ["uname", "id", "systemctl", "pacman", "sudo", "curl"]) await fs.symlink(helper, path.join(helpers, command));
 
   const runCase = async (label, options = {}) => {
@@ -110,7 +75,7 @@ elif command=='curl':
     await fs.writeFile(checksumFile, `${options.badHash ? "0".repeat(64) : hash(bytes)}  ${name}\n`);
     const release = {tag_name:`v${version}`, draft:false, prerelease:false, assets:[name, `${name}.sha256`].map((asset, index) => ({name:asset, browser_download_url:`${releaseUrl}${index ? ".sha256" : ""}`})), ...options.metadata};
     await fs.writeFile(metadataFile, JSON.stringify(release));
-    await fs.writeFile(transportFile, JSON.stringify({[api]:metadataFile, [releaseUrl]:archiveFile, [`${releaseUrl}.sha256`]:checksumFile, ...(options.bunZip ? {[bunUrl]:options.bunZip} : {})}));
+    await fs.writeFile(transportFile, JSON.stringify({[bootstrapUrl]:options.badHelper ? metadataFile : bootstrap, [api]:metadataFile, [releaseUrl]:archiveFile, [`${releaseUrl}.sha256`]:checksumFile, ...(options.bunZip ? {[bunUrl]:options.bunZip} : {})}));
     const env = {...process.env, HOME:home, PATH:helpers, TMPDIR:tmp, CS_TEST_ARCH:architecture, CS_TEST_TRANSPORT:transportFile, SUPER_SPACE_BOOTSTRAP_CALLS:callsFile, ...options.env};
     for (const key of ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "BUN_INSTALL"]) delete env[key];
     let error;
@@ -125,6 +90,7 @@ elif command=='curl':
       await assert.rejects(fs.access(path.join(home, "install-result")));
       assert.equal(await fs.readFile(preserved, "utf8"), "existing app", label);
       assert.doesNotMatch(calls, /\["sudo"|--prebuilt/, label);
+      if (options.badHelper) assert.ok(!calls.includes(api), "A mismatched helper must never run");
       if (options.noBun) await assert.rejects(fs.access(path.join(home, ".bun/bin/bun")));
     } else {
       assert.ifError(error);
@@ -139,6 +105,8 @@ elif command=='curl':
 
   await runCase("verified download with existing Bun");
   await runCase("piped installer with existing Bun", {piped:true});
+  await runCase("installer helper checksum mismatch", {badHelper:true, error:/Installer helper checksum does not match/});
+  await runCase("installer helper network failure", {env:{CS_TEST_FAILED_DOWNLOAD:bootstrapUrl}, error:/simulated download failure/});
   await runCase("root refusal", {env:{CS_TEST_UID:"0"}, error:/without sudo/});
   await runCase("macOS refusal", {env:{CS_TEST_OS:"Darwin"}, error:/Omarchy Linux/});
   await runCase("unsupported architecture", {env:{CS_TEST_ARCH:"riscv64"}, error:/Unsupported architecture/});

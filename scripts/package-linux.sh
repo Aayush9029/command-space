@@ -2,10 +2,11 @@
 set -euo pipefail
 project_dir=$(cd "$(dirname "$0")/.." && pwd)
 cd "$project_dir"
-version=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
 arch=$(uname -m)
 case "$arch" in aarch64|x86_64) ;; *) printf 'Unsupported architecture: %s\n' "$arch" >&2; exit 1;; esac
 nice -n 10 cargo build --release --locked --bin super-space
+version=$(target/release/super-space --version)
+version=${version#Super Space }
 bun install --cwd runtime --production --frozen-lockfile --ignore-scripts
 staging=$(mktemp -d)
 trap 'rm -rf "$staging"' EXIT

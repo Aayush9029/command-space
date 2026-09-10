@@ -19,7 +19,10 @@ fi
 if (( BASH_REMATCH[1] < 1 || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] < 4) || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] == 4 && BASH_REMATCH[3] < 2) )); then
   fail "Bun 1.4.2 or newer is required; found $bun_version."
 fi
-python3 -c 'import sys; sys.exit(sys.version_info < (3, 12))' || fail 'Python 3.12 or newer is required.'
+python_version=$(python3 --version)
+if [[ ! "$python_version" =~ ^Python\ ([0-9]+)\.([0-9]+) ]] || (( BASH_REMATCH[1] < 3 || (BASH_REMATCH[1] == 3 && BASH_REMATCH[2] < 12) )); then
+  fail 'Python 3.12 or newer is required.'
+fi
 systemctl --user show-environment >/dev/null || fail 'The systemd user session is unavailable. Run the installer as your desktop user.'
 [[ -f "$HOME/.config/hypr/hyprland.lua" ]] || fail "Omarchy's Hyprland Lua configuration was not found."
 
@@ -138,7 +141,7 @@ finish_install() {
       restore_services
     fi
     if [[ "$transaction_ready" == true ]]; then
-      if systemctl --user show-environment | python3 -c 'import sys; sys.exit(not any(line.startswith("HYPRLAND_INSTANCE_SIGNATURE=") for line in sys.stdin))'; then
+      if session=$(systemctl --user show-environment) && [[ $'\n'"$session" == *$'\nHYPRLAND_INSTANCE_SIGNATURE='* ]]; then
         systemd-run --user --quiet --wait --pipe --collect hyprctl reload config-only >/dev/null 2>&1 || true
         systemd-run --user --quiet --wait --pipe --collect /usr/share/omarchy/bin/omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
       fi
@@ -181,15 +184,14 @@ install -m 755 scripts/start-daemon.sh "$install_root/bin/start-daemon"
 install -m 755 scripts/installer/super-space-menu "$HOME/.local/bin/super-space-menu"
 install -m 644 scripts/installer/super-space.service "$HOME/.config/systemd/user/super-space.service"
 python3 scripts/installer/desktop-entry.py "$HOME/.local/share/applications/super-space.desktop"
-systemctl --user daemon-reload
-"$HOME/.local/bin/super-space" integration apply
 mkdir -p "$install_root/bundled-extensions"
 rsync -a --delete --exclude node_modules --exclude .git extensions/ "$install_root/bundled-extensions/"
 for bundled in "$install_root/bundled-extensions"/*; do
   [[ -f "$bundled/package.json" ]] || continue
   "$HOME/.local/bin/super-space" extension install "$bundled" --replace
 done
-systemctl --user stop super-space-dev.service 2>/dev/null || true
+systemctl --user daemon-reload
+"$HOME/.local/bin/super-space" integration apply
 systemctl --user restart super-space.service
 ready=false
 for attempt in {1..300}; do

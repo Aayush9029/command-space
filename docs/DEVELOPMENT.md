@@ -38,4 +38,6 @@ bash scripts/package-linux.sh
 
 Archives and checksums go in `dist/`. Packaging checks the executable, bundled extensions, installer rollback, and download bootstrap in disposable homes. The scripts named `verify-*` cover individual integrations; desktop checks can open windows or change the clipboard.
 
+The one-line installer verifies `scripts/installer/bootstrap.py` before running it. When that file changes, update its SHA-256 in `scripts/install.sh`.
+
 The Linux entry point is `src/linux/main.rs`. Extension runtime code lives in `runtime/`; bundled commands live in `extensions/`.
