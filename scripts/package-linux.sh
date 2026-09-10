@@ -18,7 +18,7 @@ install -m 755 scripts/install-linux.sh scripts/start-daemon.sh "$package/script
 rsync -a --exclude node_modules --exclude .git extensions/ "$package/extensions/"
 cp README.md LICENSE.md "$package/"
 cp docs/DEVELOPMENT.md docs/PORTING.md "$package/docs/"
-cp docs/assets/window-commands.png "$package/docs/assets/"
+cp docs/assets/banner.png "$package/docs/assets/"
 archive="command-space-$version-linux-$arch.tar.gz"
 tar --format=ustar --dereference --hard-dereference -czf "dist/$archive" -C "$staging" command-space
 (cd dist && sha256sum "$archive" > "$archive.sha256")

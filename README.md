@@ -9,5 +9,5 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/window-commands.png" alt="Command Space showing window commands" width="760" />
+  <img src="docs/assets/banner.png" alt="Command Space showing window commands" width="760" />
 </p>
