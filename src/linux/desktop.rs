@@ -125,58 +125,6 @@ fn executable_exists(program: &str) -> bool {
         .any(|p| p.join(program).is_file())
 }
 
-pub fn files(roots: &[String], query: &str, still_current: impl Fn() -> bool) -> Vec<Entry> {
-    let query = query.to_lowercase();
-    if query.chars().count() < 2 {
-        return vec![];
-    }
-    let mut entries = vec![];
-    for root in roots {
-        let path = if let Some(relative) = root.strip_prefix("~/") {
-            home().join(relative)
-        } else {
-            PathBuf::from(root)
-        };
-        for item in WalkDir::new(path)
-            .max_depth(12)
-            .into_iter()
-            .filter_entry(|e| {
-                !e.file_name().to_string_lossy().starts_with('.')
-                    && !matches!(
-                        e.file_name().to_str(),
-                        Some("node_modules" | "target" | "vendor")
-                    )
-            })
-            .filter_map(Result::ok)
-            .take(80_000)
-        {
-            if !still_current() {
-                return vec![];
-            }
-            let name = item.file_name().to_string_lossy();
-            if !name.to_lowercase().contains(&query) {
-                continue;
-            }
-            let path = item.path().to_string_lossy();
-            entries.push(Entry::new(
-                &format!("file:{path}"),
-                &name,
-                &path,
-                if item.file_type().is_dir() {
-                    "󰉋"
-                } else {
-                    "󰈔"
-                },
-                Action::Open(path.to_string()),
-            ));
-            if entries.len() >= 200 {
-                return entries;
-            }
-        }
-    }
-    entries
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

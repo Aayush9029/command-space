@@ -1,14 +1,19 @@
 use super::{
     desktop,
     menu::Menu,
-    model::{Action, Config, Entry, home, state_dir},
+    model::{Action, Config, Entry, home},
+    ranking::{self, Activity, Ranks},
 };
 use nucleo_matcher::{
     Matcher, Utf32Str,
     pattern::{CaseMatching, Normalization, Pattern},
 };
-use rusqlite::{Connection, params};
-use std::{collections::HashMap, fs, process::Command};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    process::Command,
+    time::Instant,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct Catalog {
@@ -16,7 +21,10 @@ pub struct Catalog {
     pub apps: Vec<Entry>,
     pub extensions: Vec<Entry>,
     pub extension_management: Vec<Entry>,
-    pub ranks: HashMap<String, (i64, bool)>,
+    pub ranks: Ranks,
+    pub activity: Activity,
+    pub ranking_loaded_at: Option<Instant>,
+    pub ranking_updates: HashMap<String, Instant>,
     pub errors: Vec<String>,
 }
 
@@ -32,7 +40,10 @@ impl Catalog {
             timings.push((name, started.elapsed().as_secs_f64() * 1000.));
             started = std::time::Instant::now();
         };
-        let mut catalog = Self::default();
+        let mut catalog = Self {
+            ranking_loaded_at: Some(Instant::now()),
+            ..Self::default()
+        };
         match Menu::load() {
             Ok(mut menu) => {
                 menu.evaluate_conditions();
@@ -46,29 +57,143 @@ impl Catalog {
         catalog.extensions = super::extensions::entries();
         catalog.extension_management = super::extensions::management_entries("extension-manager");
         checkpoint("extensions");
-        if let Ok(connection) = database()
-            && let Ok(mut statement) = connection.prepare("SELECT id, uses, favorite FROM ranking")
-            && let Ok(rows) = statement.query_map([], |r| Ok((r.get(0)?, (r.get(1)?, r.get(2)?))))
-        {
-            catalog.ranks = rows.filter_map(Result::ok).collect();
+        if let Ok((ranks, activity)) = ranking::load() {
+            catalog.ranks = ranks;
+            catalog.activity = activity;
+        } else {
+            catalog.ranking_loaded_at = None;
         }
         checkpoint("ranking");
         (catalog, timings)
     }
 
     pub fn record(&mut self, id: &str) {
-        self.ranks.entry(id.into()).or_default().0 += 1;
-        if let Ok(connection) = database() {
-            let _ = connection.execute("INSERT INTO ranking (id,uses,favorite) VALUES (?1,1,0) ON CONFLICT(id) DO UPDATE SET uses=uses+1", [id]);
+        let now = ranking::now();
+        match ranking::record(id, now) {
+            Ok((rank, usage)) => {
+                self.ranks.insert(id.into(), rank);
+                self.activity.insert(id.into(), usage);
+            }
+            Err(_) => {
+                let rank = self.ranks.entry(id.into()).or_default();
+                rank.0 = rank.0.saturating_add(1);
+                let usage = self.activity.entry(id.into()).or_default();
+                *usage = usage.record(now);
+            }
         }
+        self.ranking_updates.insert(id.into(), Instant::now());
     }
 
     pub fn favorite(&mut self, id: &str) {
-        let record = self.ranks.entry(id.into()).or_default();
-        record.1 = !record.1;
-        if let Ok(connection) = database() {
-            let _ = connection.execute("INSERT INTO ranking (id,uses,favorite) VALUES (?1,?2,?3) ON CONFLICT(id) DO UPDATE SET favorite=excluded.favorite", params![id, record.0, record.1]);
+        match ranking::favorite(id, ranking::now()) {
+            Ok((rank, usage)) => {
+                self.ranks.insert(id.into(), rank);
+                self.activity.insert(id.into(), usage);
+            }
+            Err(_) => {
+                let rank = self.ranks.entry(id.into()).or_default();
+                rank.1 = !rank.1;
+            }
         }
+        self.ranking_updates.insert(id.into(), Instant::now());
+    }
+
+    pub fn preserve_local_ranking(&mut self, previous: &Self) {
+        if self.ranking_loaded_at.is_none() {
+            self.ranks.extend(previous.ranks.clone());
+            self.activity.extend(previous.activity.clone());
+        }
+        for (id, updated_at) in &previous.ranking_updates {
+            if self
+                .ranking_loaded_at
+                .is_none_or(|loaded_at| *updated_at >= loaded_at)
+            {
+                if let Some(rank) = previous.ranks.get(id) {
+                    self.ranks.insert(id.clone(), *rank);
+                }
+                if let Some(usage) = previous.activity.get(id) {
+                    self.activity.insert(id.clone(), *usage);
+                }
+            }
+            self.ranking_updates.insert(id.clone(), *updated_at);
+        }
+    }
+
+    fn inventory(&self, config: &Config) -> Vec<Entry> {
+        let mut entries = self.menu.entries("root", true);
+        entries.extend(self.apps.clone());
+        entries.extend(self.extensions.clone());
+        entries.extend(self.extension_management.clone());
+        entries.extend(builtins());
+        entries.extend(super::windows::entries());
+        entries.extend(configured_entries(config));
+        entries
+    }
+
+    pub fn hidden_keys(&self, config: &Config) -> HashSet<String> {
+        let mut keys: HashSet<_> = config.blacklist.iter().cloned().collect();
+        if !keys.is_empty() {
+            for entry in self.inventory(config) {
+                if config.is_hidden(&entry) {
+                    keys.insert(entry.hidden_key());
+                }
+            }
+        }
+        keys
+    }
+
+    pub fn hidden_entries(&self, config: &Config) -> Vec<Entry> {
+        let inventory = self.inventory(config);
+        let mut seen = HashSet::new();
+        let mut entries: Vec<_> = config
+            .blacklist
+            .iter()
+            .filter(|key| seen.insert(key.as_str()))
+            .map(|key| {
+                let metadata = config
+                    .hidden_actions
+                    .iter()
+                    .find(|hidden| &hidden.key == key);
+                let original = inventory.iter().find(|entry| {
+                    &entry.id == key
+                        || &entry.hidden_key() == key
+                        || entry.title.eq_ignore_ascii_case(key)
+                });
+                let menu = self.menu.items.iter().find(|item| &item.id == key);
+                let title = metadata
+                    .map(|hidden| hidden.title.as_str())
+                    .or_else(|| original.map(|entry| entry.title.as_str()))
+                    .or_else(|| menu.map(|item| item.label.as_str()))
+                    .unwrap_or(key);
+                let icon = metadata
+                    .map(|hidden| hidden.icon.as_str())
+                    .or_else(|| original.map(|entry| entry.icon.as_str()))
+                    .or_else(|| menu.map(|item| item.icon.as_str()))
+                    .filter(|icon| !icon.is_empty())
+                    .unwrap_or("icon:EyeDisabled");
+                let mut entry = Entry::new(
+                    &format!("hidden:{key}"),
+                    title,
+                    "Restore action",
+                    icon,
+                    Action::Builtin(format!("unhide:{key}")),
+                );
+                entry.icon_font = metadata
+                    .map(|hidden| hidden.icon_font.clone())
+                    .or_else(|| original.map(|entry| entry.icon_font.clone()))
+                    .or_else(|| menu.map(|item| item.icon_font.clone()))
+                    .unwrap_or_default();
+                entry.keywords = key.clone();
+                entry
+            })
+            .collect();
+        entries.sort_by(|a, b| {
+            a.title
+                .to_lowercase()
+                .cmp(&b.title.to_lowercase())
+                .then(a.id.cmp(&b.id))
+        });
+        entries
     }
 
     pub fn search(
@@ -77,6 +202,17 @@ impl Catalog {
         query: &str,
         config: &Config,
         dynamic: &[Entry],
+    ) -> Vec<Entry> {
+        self.search_at(route, query, config, dynamic, ranking::now())
+    }
+
+    fn search_at(
+        &self,
+        route: &str,
+        query: &str,
+        config: &Config,
+        dynamic: &[Entry],
+        now: i64,
     ) -> Vec<Entry> {
         let expanded = config
             .aliases
@@ -97,6 +233,7 @@ impl Catalog {
                 })
                 .collect(),
             "files" => vec![],
+            "hidden" => self.hidden_entries(config),
             "extensions" => {
                 let mut entries = self.extension_management.clone();
                 entries.extend(self.extensions.clone());
@@ -158,36 +295,25 @@ impl Catalog {
                         entries.extend(super::windows::entries());
                     }
                     entries.extend(builtins());
-                    entries.extend(config.shells.iter().map(|s| {
-                        let mut entry = Entry::new(
-                            &format!("shell:{}", s.name),
-                            &s.name,
-                            &s.description,
-                            &s.icon,
-                            Action::Shell(s.command.clone()),
-                        );
-                        entry.keywords = s.alias.clone().unwrap_or_default();
-                        entry
-                    }));
-                    entries.extend(config.modes.keys().map(|mode| {
-                        Entry::new(
-                            &format!("mode:{mode}"),
-                            mode,
-                            "Custom mode",
-                            "󰘦",
-                            Action::Builtin(format!("mode:{mode}")),
-                        )
-                    }));
+                    entries.extend(configured_entries(config));
                 }
                 entries
             }
         };
-        entries.retain(|e| {
-            !config
-                .blacklist
-                .iter()
-                .any(|b| b == &e.id || b.eq_ignore_ascii_case(&e.title))
-        });
+        let hidden_keys = self.hidden_keys(config);
+        let hidden = |entry: &Entry| {
+            if hidden_keys.is_empty() || !entry.can_hide() {
+                return false;
+            }
+            let key = entry.hidden_key();
+            hidden_keys.contains(&entry.id)
+                || hidden_keys.contains(&key)
+                || config
+                    .blacklist
+                    .iter()
+                    .any(|key| key.eq_ignore_ascii_case(&entry.title))
+        };
+        entries.retain(|entry| !hidden(entry));
         let pattern = Pattern::parse(expanded, CaseMatching::Ignore, Normalization::Smart);
         let expanded_lower = expanded.to_lowercase();
         let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
@@ -203,6 +329,7 @@ impl Catalog {
                 | "settings"
                 | "favorites"
                 | "recent"
+                | "hidden"
         ) {
             &[]
         } else {
@@ -210,11 +337,7 @@ impl Catalog {
         };
         let mut scored = entries
             .iter()
-            .chain(dynamic.iter().filter(|entry| {
-                !config.blacklist.iter().any(|blocked| {
-                    blocked == &entry.id || blocked.eq_ignore_ascii_case(&entry.title)
-                })
-            }))
+            .chain(dynamic.iter().filter(|entry| !hidden(entry)))
             .enumerate()
             .filter_map(|(order, entry)| {
                 let contents = if route == "clipboard" {
@@ -253,7 +376,13 @@ impl Catalog {
                     };
                 Some((
                     entry,
-                    i64::from(score) + title_bonus + uses.min(20) + if favorite { 40 } else { 0 },
+                    i64::from(score)
+                        + title_bonus
+                        + self
+                            .activity
+                            .get(&entry.id)
+                            .map_or(uses.clamp(0, 20), |usage| usage.bonus(now))
+                        + if favorite { 40 } else { 0 },
                     order,
                 ))
             })
@@ -290,11 +419,40 @@ impl Catalog {
             .collect();
         if route == "root" && !expanded.is_empty() {
             let mut quick = quick_results(expanded, config);
+            quick.retain(|entry| !hidden(entry));
             quick.append(&mut results);
             results = quick;
         }
         results
     }
+}
+
+fn configured_entries(config: &Config) -> Vec<Entry> {
+    let mut entries: Vec<_> = config
+        .shells
+        .iter()
+        .map(|shell| {
+            let mut entry = Entry::new(
+                &format!("shell:{}", shell.name),
+                &shell.name,
+                &shell.description,
+                &shell.icon,
+                Action::Shell(shell.command.clone()),
+            );
+            entry.keywords = shell.alias.clone().unwrap_or_default();
+            entry
+        })
+        .collect();
+    entries.extend(config.modes.keys().map(|mode| {
+        Entry::new(
+            &format!("mode:{mode}"),
+            mode,
+            "Custom mode",
+            "󰘦",
+            Action::Builtin(format!("mode:{mode}")),
+        )
+    }));
+    entries
 }
 
 pub fn builtins() -> Vec<Entry> {
@@ -308,9 +466,9 @@ pub fn builtins() -> Vec<Entry> {
         ("emoji", "Search Emoji", "Find and copy an emoji", ""),
         (
             "files",
-            "Search Files",
-            "Search your documents and development folders",
-            "󰈔",
+            "File and Folder Search",
+            "Find files and folders by name or path",
+            "icon:Folder",
         ),
         (
             "extensions",
@@ -327,6 +485,12 @@ pub fn builtins() -> Vec<Entry> {
         ),
         ("recent", "Frequently Used", "Commands ranked by use", "󰥔"),
         ("settings", "Settings", "Configure your launcher", ""),
+        (
+            "hidden",
+            "Hidden Actions",
+            "Restore actions hidden from search",
+            "icon:EyeDisabled",
+        ),
         (
             "packages",
             "Installed Packages",
@@ -366,6 +530,7 @@ pub fn is_builtin_route(route: &str) -> bool {
             | "clipboard"
             | "emoji"
             | "files"
+            | "hidden"
             | "extensions"
             | "favorites"
             | "recent"
@@ -447,13 +612,6 @@ fn quick_results(query: &str, config: &Config) -> Vec<Entry> {
             "67",
             "67",
             Action::Copy("67".into()),
-        )),
-        "f" => entries.push(Entry::new(
-            "ferris",
-            "Ferris Plushies",
-            "ferris.rs",
-            "🦀",
-            Action::Open("https://ferris.rs".into()),
         )),
         "zombo" => entries.push(Entry::new(
             "zombo",
@@ -657,13 +815,6 @@ pub fn packages() -> Vec<Entry> {
         .collect()
 }
 
-fn database() -> rusqlite::Result<Connection> {
-    let _ = fs::create_dir_all(state_dir());
-    let connection = Connection::open(state_dir().join("history.db"))?;
-    connection.execute_batch("CREATE TABLE IF NOT EXISTS ranking(id TEXT PRIMARY KEY, uses INTEGER NOT NULL DEFAULT 0, favorite INTEGER NOT NULL DEFAULT 0)")?;
-    Ok(connection)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -743,6 +894,214 @@ mod tests {
         let result = catalog.search("install.aur", "tool-042", &config, &dynamic);
         assert_eq!(result[0].id, "tool-042");
         assert!(catalog.search("apps", "tool", &config, &dynamic).is_empty());
+    }
+
+    fn application(id: &str, title: &str) -> Entry {
+        Entry::new(id, title, "Application", "", Action::Copy(id.into()))
+    }
+
+    #[test]
+    fn frequent_firefox_rises_for_f_without_overriding_exact_or_unrelated_queries() {
+        let now = 2_000_000_000;
+        let mut catalog = Catalog {
+            apps: vec![
+                application("files", "Files"),
+                application("foot", "Foot"),
+                application("firefox", "Firefox"),
+                application("chrome", "Chrome"),
+            ],
+            ..Default::default()
+        };
+        let config = Config::default();
+        let search = |catalog: &Catalog, query| catalog.search_at("apps", query, &config, &[], now);
+        assert_ne!(search(&catalog, "f")[0].id, "firefox");
+        catalog.activity.insert(
+            "firefox".into(),
+            ranking::Usage {
+                weight: 12.,
+                updated_at: now,
+            },
+        );
+        catalog.ranks.insert("firefox".into(), (12, false));
+        assert_eq!(search(&catalog, "F")[0].id, "firefox");
+        assert_eq!(search(&catalog, "files")[0].id, "files");
+        assert_eq!(search(&catalog, "foot")[0].id, "foot");
+        assert_eq!(search(&catalog, "chrome")[0].id, "chrome");
+        assert!(
+            search(&catalog, "chrome")
+                .iter()
+                .all(|entry| entry.id != "firefox")
+        );
+        assert_eq!(search(&catalog, "ffx")[0].id, "firefox");
+    }
+
+    #[test]
+    fn recent_habits_replace_old_habits_and_pins_remain_effective() {
+        let now = 2_000_000_000;
+        let mut catalog = Catalog {
+            apps: vec![
+                application("files", "Files"),
+                application("firefox", "Firefox"),
+            ],
+            ..Default::default()
+        };
+        catalog.activity.insert(
+            "files".into(),
+            ranking::Usage {
+                weight: 100.,
+                updated_at: now - 140 * 86_400,
+            },
+        );
+        catalog.activity.insert(
+            "firefox".into(),
+            ranking::Usage {
+                weight: 3.,
+                updated_at: now,
+            },
+        );
+        let config = Config::default();
+        assert_eq!(
+            catalog.search_at("apps", "f", &config, &[], now)[0].id,
+            "firefox"
+        );
+        catalog.ranks.insert("files".into(), (100, true));
+        assert_eq!(
+            catalog.search_at("apps", "f", &config, &[], now)[0].id,
+            "files"
+        );
+    }
+
+    #[test]
+    fn asynchronous_catalog_refresh_preserves_newer_launches_and_pin_changes() {
+        let loaded_at = Instant::now();
+        let mut previous = Catalog::default();
+        previous.ranks.insert("firefox".into(), (6, false));
+        previous.activity.insert(
+            "firefox".into(),
+            ranking::Usage {
+                weight: 6.,
+                updated_at: 200,
+            },
+        );
+        previous.ranking_updates.insert("firefox".into(), loaded_at);
+        let mut refreshed = Catalog {
+            ranking_loaded_at: Some(loaded_at),
+            ..Default::default()
+        };
+        refreshed.ranks.insert("firefox".into(), (5, true));
+        refreshed.activity.insert(
+            "firefox".into(),
+            ranking::Usage {
+                weight: 5.,
+                updated_at: 100,
+            },
+        );
+        refreshed.preserve_local_ranking(&previous);
+        assert_eq!(refreshed.ranks["firefox"], (6, false));
+        assert_eq!(refreshed.activity["firefox"], previous.activity["firefox"]);
+        let mut later = Catalog {
+            ranking_loaded_at: Some(loaded_at + std::time::Duration::from_secs(1)),
+            ..Default::default()
+        };
+        later.ranks.insert("firefox".into(), (7, true));
+        later.preserve_local_ranking(&refreshed);
+        assert_eq!(later.ranks["firefox"], (7, true));
+        let mut unavailable = Catalog::default();
+        unavailable.preserve_local_ranking(&later);
+        assert_eq!(unavailable.ranks["firefox"], (7, true));
+    }
+
+    #[test]
+    fn hidden_extensions_do_not_resurface_through_aliases_favorites_or_recent() {
+        let command = Action::Extension {
+            extension: "tools".into(),
+            command: "work".into(),
+        };
+        let direct = Entry::new(
+            "extension:tools:work",
+            "Work",
+            "",
+            "icon:Hammer",
+            command.clone(),
+        );
+        let wrapper = Entry::new("omarchy.work", "Native Work", "", "icon:Hammer", command);
+        let mut catalog = Catalog {
+            extensions: vec![direct.clone(), wrapper.clone()],
+            ..Default::default()
+        };
+        catalog.ranks.insert(direct.id.clone(), (100, true));
+        catalog.ranks.insert(wrapper.id.clone(), (100, true));
+        for key in [&direct.id, &wrapper.id, &wrapper.title] {
+            let config = Config {
+                blacklist: vec![key.clone()],
+                ..Default::default()
+            };
+            for route in ["root", "extensions", "favorites", "recent"] {
+                let results = catalog.search_at(route, "work", &config, &[], 2_000_000_000);
+                assert!(
+                    results
+                        .iter()
+                        .all(|entry| !matches!(entry.action, Action::Extension { .. })),
+                    "{route}: {key}"
+                );
+            }
+            let hidden = catalog.search_at("hidden", "work", &config, &[], 2_000_000_000);
+            assert_eq!(hidden.len(), 1);
+            assert_eq!(hidden[0].action, Action::Builtin(format!("unhide:{key}")));
+        }
+    }
+
+    #[test]
+    fn hidden_dynamic_entries_restore_by_metadata_without_loading_their_provider() {
+        let config = Config {
+            blacklist: vec!["file:/tmp/Report, final.pdf".into()],
+            hidden_actions: vec![super::super::model::HiddenAction {
+                key: "file:/tmp/Report, final.pdf".into(),
+                title: "Report, final.pdf".into(),
+                icon: "icon:Document".into(),
+                icon_font: String::new(),
+            }],
+            ..Default::default()
+        };
+        let hidden = Catalog::default().search("hidden", "report", &config, &[]);
+        assert_eq!(hidden[0].title, "Report, final.pdf");
+        assert_eq!(hidden[0].icon, "icon:Document");
+        assert_eq!(
+            hidden[0].action,
+            Action::Builtin("unhide:file:/tmp/Report, final.pdf".into())
+        );
+    }
+
+    #[test]
+    fn hidden_quick_actions_are_filtered_and_f_uses_adaptive_application_ranking() {
+        let config = Config {
+            blacklist: vec!["calculator".into(), "run-shell".into(), "open-url".into()],
+            ..Default::default()
+        };
+        let mut catalog = Catalog::default();
+        for query in ["2+2", "> echo hello", "https://example.com"] {
+            assert!(
+                catalog
+                    .search("root", query, &config, &[])
+                    .iter()
+                    .all(|entry| !config.is_hidden(entry))
+            );
+        }
+        catalog.apps = vec![
+            application("app:files", "Files"),
+            application("app:firefox", "Firefox"),
+        ];
+        catalog.activity.insert(
+            "app:firefox".into(),
+            ranking::Usage {
+                weight: 12.,
+                updated_at: 2_000_000_000,
+            },
+        );
+        assert_eq!(
+            catalog.search_at("root", "f", &config, &[], 2_000_000_000)[0].id,
+            "app:firefox"
+        );
     }
 
     #[test]

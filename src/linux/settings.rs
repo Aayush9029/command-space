@@ -26,7 +26,6 @@ impl Editor {
             ("max_results", config.max_results.to_string()),
             ("debounce_ms", config.debounce_ms.to_string()),
             ("search_dirs", config.search_dirs.join(", ")),
-            ("blacklist", config.blacklist.join(", ")),
         ]
         .into_iter()
         .map(|(key, value)| (key.into(), value))
@@ -155,16 +154,12 @@ impl Editor {
         config.height = number("height", 240.0, 1200.0)?;
         config.max_results = number("max_results", 10.0, 500.0)? as usize;
         config.debounce_ms = number("debounce_ms", 0.0, 2000.0)? as u64;
-        let list = |key: &str| {
-            self.values[key]
-                .split(',')
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(String::from)
-                .collect()
-        };
-        config.search_dirs = list("search_dirs");
-        config.blacklist = list("blacklist");
+        config.search_dirs = self.values["search_dirs"]
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect();
         config.aliases = self
             .aliases
             .iter()
@@ -256,13 +251,10 @@ impl Editor {
                         "~/Documents, ~/Downloads",
                         colors,
                     ))
-                    .push(input(
-                        "Hidden results",
-                        "blacklist",
-                        &self.values["blacklist"],
-                        "Apps or commands, comma separated",
-                        colors,
-                    ))
+                    .push(
+                        button("Manage hidden actions", colors)
+                            .on_press(Message::Run(super::model::Action::Builtin("hidden".into()))),
+                    )
                     .push(input(
                         "Result limit",
                         "max_results",
@@ -980,6 +972,17 @@ impl<'a> AccessibleButton<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn editing_settings_preserves_hidden_keys_with_commas() {
+        let config = Config {
+            blacklist: vec!["file:/tmp/report, final.pdf".into(), "Old App".into()],
+            ..Config::default()
+        };
+        let mut editor = Editor::new(&config);
+        editor.change("placeholder", "Search anything".into());
+        assert_eq!(editor.validated().unwrap().blacklist, config.blacklist);
+    }
 
     #[test]
     fn failed_integration_restores_configuration_and_desktop_settings() {

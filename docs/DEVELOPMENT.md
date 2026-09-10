@@ -50,6 +50,8 @@ For destructive clipboard UI checks, `python3 scripts/verify-clipboard-clear.py 
 
 `command-space benchmark` measures catalog loading and in-process search. `scripts/measure-performance.py` measures service restart and warm reopening through the real Hyprland window state, then samples hidden-service CPU and memory after a settling period. Its window timings include polling overhead and do not measure display frame latency. Run desktop measurements through the graphical systemd user environment without concurrent builds or screenshot capture.
 
+`cargo test --locked --bin command-space` exercises frecency decay and persistence, legacy-history migration, concurrent ranking writers, file-index reconciliation and persistence, fuzzy paths, exclusions, root changes, and stale query rejection using disposable fixtures. It does not open applications or change the desktop. `cargo test --release --locked --bin command-space files::tests::cached_search_ten_thousand_files -- --ignored --nocapture` measures cold indexing, cached loading, and in-memory queries using a temporary 10,000-file tree.
+
 `cargo test --release --locked aur_catalog_search_profile -- --ignored --nocapture` measures search against the guest’s installed AUR catalog. It requires the full catalog and excludes provider loading from its query timings.
 
 Both hosted CI architectures and package builds passed at `edc243c`. The release workflow repeats the full checks for each tagged revision. Native test results and release validation are tracked in [PORTING.md](PORTING.md).

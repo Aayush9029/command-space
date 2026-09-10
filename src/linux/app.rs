@@ -1,7 +1,6 @@
 use super::{
     appearance::Colors,
     catalog::{self, Catalog},
-    desktop,
     menu::packages,
     model::{Action, Config, Entry, config_dir, shell_quote},
     windows,
@@ -21,7 +20,7 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    Loaded(Catalog),
+    Loaded(Box<Catalog>),
     Query(String),
     Move(i32),
     Activate(usize),
@@ -31,7 +30,8 @@ pub enum Message {
     Show(String, bool),
     Opened(window::Id),
     Dynamic(u64, String, Vec<Entry>),
-    Files(String, Vec<Entry>),
+    Files(u64, Vec<String>, String, Result<Vec<Entry>, String>),
+    FileIndexRefreshed(u64, Vec<String>, Result<bool, String>),
     Detail(String, String),
     PackageToggle(usize, i32),
     PackageClear,
@@ -95,6 +95,11 @@ pub struct Launcher {
     settings: Option<super::settings::Editor>,
     config_stamp: Option<std::time::SystemTime>,
     file_generation: Arc<AtomicU64>,
+    file_index: Arc<super::files::Index>,
+    file_indexing: bool,
+    file_roots: Vec<String>,
+    file_roots_revision: u64,
+    next_file_refresh: std::time::Instant,
     extension: Option<super::extensions::Session>,
     extension_view: super::extension_view::ExtensionView,
     extension_title: String,
@@ -166,6 +171,7 @@ impl Launcher {
                     ("Show in file manager", "reveal"),
                     ("Copy path", "copy"),
                     ("Move to Trash", "delete"),
+                    ("Refresh file index", "refresh-files"),
                 ],
                 _ => &[],
             };
@@ -210,6 +216,13 @@ impl Launcher {
                     .into(),
                     Message::PackagePreviewKind,
                 ));
+            }
+        }
+        if self.extension.is_none() {
+            if self.route == "hidden" {
+                items = vec![("Restore action".into(), Message::Submit)];
+            } else if self.results.get(self.selected).is_some_and(Entry::can_hide) {
+                items.push(("Hide action".into(), Message::EntryAction("hide".into())));
             }
         }
         items.retain(|(title, _)| {
@@ -296,6 +309,13 @@ impl Launcher {
                 .and_then(|m| m.modified())
                 .ok(),
             file_generation: Arc::new(AtomicU64::new(0)),
+            file_index: Arc::new(super::files::Index::new(
+                super::model::state_dir().join("files.sqlite"),
+            )),
+            file_indexing: false,
+            file_roots: config.search_dirs.clone(),
+            file_roots_revision: 0,
+            next_file_refresh: std::time::Instant::now(),
             extension: None,
             extension_view: Default::default(),
             extension_title: String::new(),
@@ -341,7 +361,7 @@ impl Launcher {
                     .await
                     .unwrap_or_default()
             },
-            Message::Loaded,
+            |catalog| Message::Loaded(Box::new(catalog)),
         )
     }
 
@@ -352,7 +372,13 @@ impl Launcher {
             self.selected = self.selected.min(self.results.len().saturating_sub(1));
             return;
         }
-        self.results = if self.route == "packages"
+        self.results = if self.route == "files" {
+            self.dynamic
+                .iter()
+                .filter(|entry| !self.config.is_hidden(entry))
+                .cloned()
+                .collect()
+        } else if self.route == "packages"
             || self.route.starts_with("extension-manage:")
             || self.route == "running"
             || self.route == "updates"
@@ -384,6 +410,7 @@ impl Launcher {
         if toggle && self.window.is_some() && self.route == next {
             return self.hide();
         }
+        self.file_generation.fetch_add(1, Ordering::Relaxed);
         self.dynamic_generation = self.dynamic_generation.wrapping_add(1);
         self.dynamic_loading = false;
         self.package_selection.clear();
@@ -518,9 +545,11 @@ impl Launcher {
             || self.window.is_none()
             || self.extension.is_some()
             || self.settings.is_some()
-            || self.route == "files"
         {
             return Task::none();
+        }
+        if self.route == "files" {
+            return Task::batch([self.search_files(), self.refresh_files(false)]);
         }
         self.dynamic_loading = true;
         if self.route == "updates" {
@@ -547,6 +576,75 @@ impl Launcher {
                 |(generation, route, result)| Message::Dynamic(generation, route, result),
             ),
         ])
+    }
+
+    fn file_roots_revision(&mut self) -> u64 {
+        if self.file_roots != self.config.search_dirs {
+            self.file_roots = self.config.search_dirs.clone();
+            self.file_roots_revision = self.file_roots_revision.wrapping_add(1);
+            self.file_generation.fetch_add(1, Ordering::Relaxed);
+            if self.route == "files" {
+                self.dynamic.clear();
+                self.results.clear();
+            }
+        }
+        self.file_roots_revision
+    }
+
+    fn search_files(&mut self) -> Task<Message> {
+        let roots_revision = self.file_roots_revision();
+        let request = self.file_generation.fetch_add(1, Ordering::Relaxed) + 1;
+        let generation = Arc::clone(&self.file_generation);
+        let index = Arc::clone(&self.file_index);
+        let roots = self.config.search_dirs.clone();
+        let query = self.query.clone();
+        let limit = self.config.max_results;
+        let blacklist = self.config.blacklist.clone();
+        let debounce = self.config.debounce_ms;
+        self.dynamic_loading = true;
+        Task::perform(
+            async move {
+                tokio::time::sleep(std::time::Duration::from_millis(debounce)).await;
+                let search_roots = roots.clone();
+                let search_query = query.clone();
+                let result = tokio::task::spawn_blocking(move || {
+                    if generation.load(Ordering::Relaxed) != request {
+                        return Ok(Vec::new());
+                    }
+                    if !index.load_versioned(&search_roots, roots_revision)? {
+                        return Ok(Vec::new());
+                    }
+                    Ok(index.search(&search_roots, &search_query, limit, &blacklist))
+                })
+                .await
+                .unwrap_or_else(|error| Err(error.to_string()));
+                Message::Files(request, roots, query, result)
+            },
+            |message| message,
+        )
+    }
+
+    fn refresh_files(&mut self, force: bool) -> Task<Message> {
+        let roots_revision = self.file_roots_revision();
+        if self.file_indexing {
+            return Task::none();
+        }
+        self.file_indexing = true;
+        self.next_file_refresh = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        let index = Arc::clone(&self.file_index);
+        let roots = self.config.search_dirs.clone();
+        Task::perform(
+            async move {
+                let scan_roots = roots.clone();
+                let result = tokio::task::spawn_blocking(move || {
+                    index.refresh_versioned(&scan_roots, force, roots_revision)
+                })
+                .await
+                .unwrap_or_else(|error| Err(error.to_string()));
+                Message::FileIndexRefreshed(roots_revision, roots, result)
+            },
+            |message| message,
+        )
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -579,7 +677,7 @@ impl Launcher {
                     Err(error) => error,
                 };
             }
-            Message::Loaded(catalog) => {
+            Message::Loaded(mut catalog) => {
                 if !self.restored_backgrounds {
                     self.restored_backgrounds = true;
                     self.backgrounds = super::background::restore();
@@ -591,7 +689,8 @@ impl Launcher {
                 if self.catalog.menu.items.is_empty() && !catalog::is_builtin_route(&self.route) {
                     self.route = catalog.menu.resolve(&self.route);
                 }
-                self.catalog = catalog;
+                catalog.preserve_local_ranking(&self.catalog);
+                self.catalog = *catalog;
                 self.rebuild();
                 if let Some(link) = self.pending_link.take() {
                     return self.update(Message::DeepLink(link));
@@ -632,8 +731,11 @@ impl Launcher {
             Message::Show(route, toggle) => return self.show(&route, toggle),
             Message::Hide => return self.hide(),
             Message::Query(query) => {
-                let request = self.file_generation.fetch_add(1, Ordering::Relaxed) + 1;
+                self.file_generation.fetch_add(1, Ordering::Relaxed);
                 self.query = query;
+                if self.route == "files" {
+                    self.dynamic.clear();
+                }
                 self.selected = 0;
                 self.actions = false;
                 self.rebuild();
@@ -648,28 +750,7 @@ impl Launcher {
                     ));
                 }
                 if self.route == "files" {
-                    let query = self.query.clone();
-                    let roots = self.config.search_dirs.clone();
-                    let generation = self.file_generation.clone();
-                    let debounce = self.config.debounce_ms;
-                    return Task::perform(
-                        async move {
-                            tokio::time::sleep(std::time::Duration::from_millis(debounce)).await;
-                            if generation.load(Ordering::Relaxed) != request {
-                                return (query, vec![]);
-                            }
-                            let copy = query.clone();
-                            let files = tokio::task::spawn_blocking(move || {
-                                desktop::files(&roots, &copy, || {
-                                    generation.load(Ordering::Relaxed) == request
-                                })
-                            })
-                            .await
-                            .unwrap_or_default();
-                            (query, files)
-                        },
-                        |(query, entries)| Message::Files(query, entries),
-                    );
+                    return self.search_files();
                 }
                 return self.load_package_preview();
             }
@@ -775,6 +856,9 @@ impl Launcher {
                 } else if self.detail.is_some() {
                     self.detail = None;
                 } else if !self.query.is_empty() {
+                    if self.route == "files" {
+                        return self.update(Message::Query(String::new()));
+                    }
                     self.query.clear();
                     self.selected = 0;
                     self.rebuild();
@@ -797,7 +881,8 @@ impl Launcher {
                 ]);
             }
             Message::Dynamic(generation, route, entries) => {
-                if generation == self.dynamic_generation
+                if self.route != "files"
+                    && generation == self.dynamic_generation
                     && route == self.route
                     && !self.loading
                     && self.window.is_some()
@@ -810,10 +895,45 @@ impl Launcher {
                     return self.load_package_preview();
                 }
             }
-            Message::Files(query, entries) => {
-                if self.route == "files" && self.query == query {
-                    self.dynamic = entries;
-                    self.rebuild();
+            Message::Files(generation, roots, query, result) => {
+                if self.route == "files"
+                    && self.window.is_some()
+                    && self.extension.is_none()
+                    && self.settings.is_none()
+                    && self.file_generation.load(Ordering::Relaxed) == generation
+                    && self.config.search_dirs == roots
+                    && self.query == query
+                {
+                    self.dynamic_loading = false;
+                    match result {
+                        Ok(entries) => {
+                            self.dynamic = entries;
+                            self.rebuild();
+                        }
+                        Err(error) => self.status = error,
+                    }
+                }
+            }
+            Message::FileIndexRefreshed(roots_revision, roots, result) => {
+                self.file_indexing = false;
+                if self.route == "files"
+                    && self.window.is_some()
+                    && self.extension.is_none()
+                    && self.settings.is_none()
+                {
+                    if roots != self.config.search_dirs
+                        || roots_revision != self.file_roots_revision()
+                    {
+                        return self.refresh_files(false);
+                    }
+                    match result {
+                        Ok(true) => {
+                            self.status.clear();
+                            return self.search_files();
+                        }
+                        Ok(false) => {}
+                        Err(error) => self.status = format!("File index: {error}"),
+                    }
                 }
             }
             Message::Detail(title, body) => {
@@ -937,10 +1057,16 @@ impl Launcher {
             Message::Run(action) => return self.run(action),
             Message::Quit => return iced::exit(),
             Message::Reload => {
+                if self.route == "files" {
+                    self.file_generation.fetch_add(1, Ordering::Relaxed);
+                    self.dynamic.clear();
+                    self.results.clear();
+                }
                 match Config::load() {
                     Ok(config) => self.config = config,
                     Err(error) => self.status = error,
                 }
+                self.file_roots_revision();
                 self.colors = Colors::configured(&self.config);
                 if !self.loading {
                     self.loading = true;
@@ -1118,6 +1244,16 @@ impl Launcher {
                 }
                 if self.route == "clipboard" && self.window.is_some() {
                     self.rebuild();
+                }
+                if self.route == "files"
+                    && self.window.is_some()
+                    && self.extension.is_none()
+                    && self.settings.is_none()
+                    && !self.loading
+                    && !self.file_indexing
+                    && std::time::Instant::now() >= self.next_file_refresh
+                {
+                    return self.refresh_files(false);
                 }
                 if self.window.is_some() {
                     return Task::perform(
@@ -1602,7 +1738,9 @@ impl Launcher {
         let Some(entry) = self.results.get(self.selected).cloned() else {
             return Task::none();
         };
-        self.catalog.record(&entry.id);
+        if self.route != "hidden" {
+            self.catalog.record(&entry.id);
+        }
         self.run(entry.action)
     }
 
@@ -1646,6 +1784,20 @@ impl Launcher {
             Action::Menu(route) => self.enter(route),
             Action::Builtin(name) => match name.as_str() {
                 "back" => self.update(Message::Back),
+                _ if name.starts_with("unhide:") => {
+                    match self.config.unhide_entry(name.trim_start_matches("unhide:")) {
+                        Ok(()) => self.hidden_actions_changed(),
+                        Err(error) => {
+                            self.status = error;
+                            Task::none()
+                        }
+                    }
+                }
+                "hidden" => {
+                    self.settings = None;
+                    self.extension = None;
+                    self.enter("hidden".into())
+                }
                 _ if name.starts_with("extension-stop:") => {
                     if let Some((extension, command)) =
                         name.trim_start_matches("extension-stop:").split_once('/')
@@ -2154,8 +2306,27 @@ impl Launcher {
         Task::none()
     }
 
+    fn hidden_actions_changed(&mut self) -> Task<Message> {
+        self.colors = Colors::configured(&self.config);
+        self.config_stamp = std::fs::metadata(config_dir().join("config.toml"))
+            .and_then(|metadata| metadata.modified())
+            .ok();
+        self.file_generation.fetch_add(1, Ordering::Relaxed);
+        self.actions = false;
+        self.status.clear();
+        self.rebuild();
+        if self.route == "files" {
+            self.search_files()
+        } else {
+            self.load_package_preview()
+        }
+    }
+
     fn entry_action(&mut self, operation: &str) -> Task<Message> {
         self.actions = false;
+        if operation == "refresh-files" && self.route == "files" {
+            return self.refresh_files(true);
+        }
         if operation == "clear-clipboard" {
             self.confirm(
                 "clear-clipboard",
@@ -2168,6 +2339,17 @@ impl Launcher {
             return Task::none();
         };
         match operation {
+            "hide" if self.extension.is_none() => match self.config.hide_entry(&entry) {
+                Ok(()) => {
+                    if let Some(name) = packages::name(&self.route, &entry)
+                        && self.package_selection.contains(name)
+                    {
+                        self.package_selection.toggle(name);
+                    }
+                    return self.hidden_actions_changed();
+                }
+                Err(error) => self.status = error,
+            },
             "copy" => {
                 let action = match entry.action {
                     Action::Copy(_) | Action::CopyImage(_) => entry.action,
@@ -2543,7 +2725,11 @@ impl Launcher {
 
     pub fn view(&self, _id: window::Id) -> Element<'_, Message> {
         let colors = self.colors;
-        let context_placeholder = if self.route != "root" && self.extension.is_none() {
+        let context_placeholder = if self.route == "hidden" {
+            "Search hidden actions…".into()
+        } else if self.route == "files" {
+            "Search files and folders…".into()
+        } else if self.route != "root" && self.extension.is_none() {
             format!(
                 "Search {}…",
                 self.catalog.menu.title(&self.route).to_lowercase()
@@ -2667,21 +2853,25 @@ impl Launcher {
             }
             scrollable(grid).id("results").height(Fill).into()
         } else if self.results.is_empty() {
-            let awaiting_query = self.route == "files" && self.query.len() < 2;
+            let indexing = self.route == "files" && self.file_indexing;
             let mut empty = column![
-                text(if self.loading || self.dynamic_loading {
+                text(if indexing {
+                    "Indexing files and folders…"
+                } else if self.loading || self.dynamic_loading {
                     "Loading…"
-                } else if awaiting_query {
-                    "Search files by name"
+                } else if self.route == "hidden" && self.query.is_empty() {
+                    "No hidden actions"
                 } else {
                     "No results"
                 })
                 .size(18)
             ]
             .spacing(10);
-            if !self.loading && !self.dynamic_loading && !awaiting_query {
+            if !self.loading && !self.dynamic_loading && !indexing {
                 empty = empty.push(
-                    text(if self.route == "extensions" {
+                    text(if self.route == "hidden" && self.query.is_empty() {
+                        "Choose Hide action from a result’s actions menu"
+                    } else if self.route == "extensions" {
                         "Add an extension to get started"
                     } else {
                         "Try a different search"
@@ -2899,7 +3089,9 @@ impl Launcher {
             let package_primary = self
                 .package_operation()
                 .map(|operation| self.package_selection.primary(operation));
-            let primary = if let Some(primary) = &package_primary {
+            let primary = if self.route == "hidden" {
+                "Restore"
+            } else if let Some(primary) = &package_primary {
                 primary.as_str()
             } else if is_form {
                 "Submit"
@@ -3095,6 +3287,12 @@ async fn dynamic_entries(
     .unwrap_or_default()
 }
 
+fn default_open_command(path: &str) -> Command {
+    let mut command = Command::new("xdg-open");
+    command.arg(path);
+    command
+}
+
 fn execute_action(action: Action, paste: bool) -> Result<(), String> {
     let mut process = match action {
         Action::Shell(command) => {
@@ -3107,11 +3305,7 @@ fn execute_action(action: Action, paste: bool) -> Result<(), String> {
             p.args(["launch", &path]);
             p
         }
-        Action::Open(path) => {
-            let mut p = Command::new("xdg-open");
-            p.arg(path);
-            p
-        }
+        Action::Open(path) => default_open_command(&path),
         Action::Window { operation, target } => return windows::operate(&operation, &target),
         Action::Copy(text) => {
             let mut child = Command::new("wl-copy")
@@ -3227,7 +3421,7 @@ mod tests {
         assert!(!launcher.dynamic_loading);
 
         let _ = launcher.update(Message::Query("jq".into()));
-        let task = launcher.update(Message::Loaded(package_catalog()));
+        let task = launcher.update(Message::Loaded(Box::new(package_catalog())));
         assert_eq!(task.units(), 2);
         assert!(launcher.dynamic_loading);
         let generation = launcher.dynamic_generation;
@@ -3326,8 +3520,194 @@ mod tests {
     fn file_search_does_not_schedule_a_competing_empty_provider() {
         let mut launcher = launcher("files");
         launcher.loading = false;
-        assert_eq!(launcher.load_dynamic().units(), 0);
-        assert!(!launcher.dynamic_loading);
+        assert_eq!(launcher.load_dynamic().units(), 2);
+        assert!(launcher.dynamic_loading);
+        assert!(launcher.file_indexing);
+        let _ = launcher.update(Message::Dynamic(
+            launcher.dynamic_generation,
+            "files".into(),
+            vec![],
+        ));
+        assert!(launcher.dynamic_loading);
+    }
+
+    #[test]
+    fn file_results_reject_stale_queries_roots_and_closed_views() {
+        let mut launcher = launcher("files");
+        launcher.loading = false;
+        let _ = launcher.update(Message::Query("f".into()));
+        let old = launcher.file_generation.load(Ordering::Relaxed);
+        let _ = launcher.update(Message::Query("folder".into()));
+        let current = launcher.file_generation.load(Ordering::Relaxed);
+        let roots = launcher.config.search_dirs.clone();
+        let entry = Entry::new(
+            "file:/tmp/folder",
+            "folder",
+            "/tmp/folder",
+            "icon:Folder",
+            Action::Open("/tmp/folder".into()),
+        );
+        let _ = launcher.update(Message::Files(
+            old,
+            roots.clone(),
+            "f".into(),
+            Ok(vec![entry.clone()]),
+        ));
+        assert!(launcher.results.is_empty());
+        let _ = launcher.update(Message::Files(
+            current,
+            vec!["/different".into()],
+            "folder".into(),
+            Ok(vec![entry.clone()]),
+        ));
+        assert!(launcher.results.is_empty());
+        let _ = launcher.update(Message::Files(
+            current,
+            roots.clone(),
+            "folder".into(),
+            Ok(vec![entry.clone()]),
+        ));
+        assert_eq!(launcher.results[0].action, entry.action);
+        let _ = launcher.update(Message::Back);
+        assert!(launcher.query.is_empty());
+        assert!(launcher.results.is_empty());
+        let _ = launcher.update(Message::Files(
+            current,
+            roots.clone(),
+            "folder".into(),
+            Ok(vec![entry.clone()]),
+        ));
+        assert!(launcher.results.is_empty());
+        let current = launcher.file_generation.load(Ordering::Relaxed);
+        launcher.window = None;
+        let _ = launcher.update(Message::Files(
+            current,
+            roots,
+            String::new(),
+            Ok(vec![entry]),
+        ));
+        assert!(launcher.results.is_empty());
+    }
+
+    #[test]
+    fn file_refresh_requeries_current_text_and_works_without_results() {
+        let mut launcher = launcher("files");
+        launcher.loading = false;
+        launcher.query = "invoice".into();
+        assert_eq!(launcher.entry_action("refresh-files").units(), 1);
+        assert!(launcher.file_indexing);
+        assert_eq!(launcher.entry_action("refresh-files").units(), 0);
+        let roots = launcher.config.search_dirs.clone();
+        assert_eq!(
+            launcher
+                .update(Message::FileIndexRefreshed(
+                    launcher.file_roots_revision,
+                    roots,
+                    Ok(true)
+                ))
+                .units(),
+            1
+        );
+        assert!(!launcher.file_indexing);
+        assert!(launcher.dynamic_loading);
+        assert_eq!(launcher.query, "invoice");
+    }
+
+    #[test]
+    fn file_root_revision_changes_only_for_roots_and_invalidates_visible_results() {
+        let mut launcher = launcher("files");
+        launcher.loading = false;
+        let roots = launcher.config.search_dirs.clone();
+        let initial = launcher.file_roots_revision();
+        let _ = launcher.search_files();
+        let _ = launcher.update(Message::Query("report".into()));
+        assert_eq!(launcher.file_roots_revision(), initial);
+        launcher.dynamic = vec![Entry::new(
+            "file:/old/report",
+            "report",
+            "/old/report",
+            "",
+            Action::Open("/old/report".into()),
+        )];
+        launcher.rebuild();
+        let query_generation = launcher.file_generation.load(Ordering::Relaxed);
+        launcher.config.search_dirs = vec!["/new".into()];
+        let _ = launcher.search_files();
+        assert!(launcher.dynamic.is_empty());
+        assert!(launcher.results.is_empty());
+        assert_ne!(launcher.file_roots_revision(), initial);
+        assert_ne!(
+            launcher.file_generation.load(Ordering::Relaxed),
+            query_generation
+        );
+        launcher.config.search_dirs = roots.clone();
+        let _ = launcher.search_files();
+        assert_ne!(launcher.file_roots_revision(), initial);
+        launcher.file_indexing = true;
+        assert_eq!(
+            launcher
+                .update(Message::FileIndexRefreshed(initial, roots, Ok(false)))
+                .units(),
+            1
+        );
+        assert!(launcher.file_indexing);
+    }
+
+    #[test]
+    fn hide_controls_use_restore_actions_and_reject_pending_file_results() {
+        let mut launcher = launcher("files");
+        launcher.loading = false;
+        launcher.query = "report".into();
+        let entry = Entry::new(
+            "file:/tmp/report.txt",
+            "report.txt",
+            "/tmp/report.txt",
+            "icon:Document",
+            Action::Open("/tmp/report.txt".into()),
+        );
+        launcher.dynamic = vec![entry.clone()];
+        launcher.rebuild();
+        assert!(
+            launcher
+                .panel_items()
+                .iter()
+                .any(|(title, message)| title == "Hide action"
+                    && matches!(message, Message::EntryAction(action) if action == "hide"))
+        );
+        let pending = launcher.file_generation.load(Ordering::Relaxed);
+        launcher.config.blacklist.push(entry.id.clone());
+        assert_eq!(launcher.hidden_actions_changed().units(), 1);
+        assert!(launcher.results.is_empty());
+        let _ = launcher.update(Message::Files(
+            pending,
+            launcher.config.search_dirs.clone(),
+            "report".into(),
+            Ok(vec![entry]),
+        ));
+        assert!(launcher.results.is_empty());
+        launcher.route = "hidden".into();
+        launcher.query.clear();
+        launcher.rebuild();
+        assert_eq!(launcher.panel_items().len(), 1);
+        assert_eq!(launcher.panel_items()[0].0, "Restore action");
+        assert!(
+            matches!(&launcher.results[0].action, Action::Builtin(name) if name == "unhide:file:/tmp/report.txt")
+        );
+    }
+
+    #[test]
+    fn default_opener_receives_files_and_folders_as_literal_arguments() {
+        for path in [
+            "/tmp/My Documents",
+            "/tmp/a 'quote' $(touch nope); résumé.pdf",
+        ] {
+            let command = default_open_command(path);
+            assert_eq!(command.get_program(), "xdg-open");
+            assert_eq!(
+                command.get_args().collect::<Vec<_>>(),
+                vec![std::ffi::OsStr::new(path)]
+            );
+        }
     }
 
     #[test]
