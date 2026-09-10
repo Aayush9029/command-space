@@ -1,22 +1,22 @@
 import { EventEmitter } from "node:events";
-import { keyring } from "./oauth.mjs";
+import { lookupCredential } from "./oauth.mjs";
 
 export function aiAvailable() {
-  const config = globalThis.__commandSpace?.ai;
+  const config = globalThis.__superSpace?.ai;
   return Boolean(config?.endpoint && config?.model);
 }
 
 export const AI = {
-  __commandSpaceCapability: "ai",
+  __superSpaceCapability: "ai",
   Model: new Proxy({}, {get: (_, name) => String(name)}),
   ask(prompt, options = {}) {
     const events = new EventEmitter();
     const answer = Promise.resolve().then(async () => {
-      const config = globalThis.__commandSpace?.ai;
-      if (!aiAvailable()) throw new Error("Choose an AI endpoint and model in Command Space Settings → Extensions");
+      const config = globalThis.__superSpace?.ai;
+      if (!aiAvailable()) throw new Error("Choose an AI endpoint and model in Super Space Settings → Extensions");
       const endpoint = new URL(config.endpoint.endsWith("/") ? config.endpoint : `${config.endpoint}/`);
       if (!["http:", "https:"].includes(endpoint.protocol)) throw new Error("The AI endpoint must use HTTP or HTTPS");
-      const token = process.env.COMMAND_SPACE_AI_API_KEY || await keyring(["lookup", "application", "command-space", "service", "ai", "endpoint", config.endpoint]);
+      const token = process.env.SUPER_SPACE_AI_API_KEY || await lookupCredential(["service", "ai", "endpoint", config.endpoint], "Super Space AI provider");
       const creativity = typeof options.creativity === "number" ? options.creativity : {none:0,low:0.3,medium:0.7,high:1,maximum:2}[options.creativity];
       const body = {model:config.models?.[options.model] || config.model, messages:[{role:"user", content:String(prompt)}], stream:true};
       if (creativity !== undefined) body.temperature = Math.min(2, Math.max(0, creativity));

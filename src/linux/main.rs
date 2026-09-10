@@ -30,6 +30,7 @@ fn main() -> iced::Result {
     let verb = arguments.first().map(String::as_str).unwrap_or("toggle");
     let route = arguments.get(1).map(String::as_str).unwrap_or("root");
     let is_link = [
+        "super-space://",
         "command-space://",
         "rustcast://",
         "raycast://",
@@ -62,12 +63,12 @@ fn main() -> iced::Result {
             return Ok(());
         }
         "--version" | "version" => {
-            println!("Command Space {}", env!("CARGO_PKG_VERSION"));
+            println!("Super Space {}", env!("CARGO_PKG_VERSION"));
             return Ok(());
         }
         "--help" | "help" => {
             println!(
-                "command-space [toggle|show|hide] [route]\ncommand-space daemon\ncommand-space refresh|ping|quit\ncommand-space menu [route|dump|inspect]\ncommand-space search <query>\ncommand-space extension install <directory|github-url>\ncommand-space extension update|remove <name>\ncommand-space extension list\ncommand-space run-shell <name> [arguments...]\ncommand-space window <position> [window-id]\ncommand-space integration apply|uninstall\nUse builtin:settings, builtin:clipboard, or builtin:emoji for launcher routes."
+                "super-space [toggle|show|hide] [route]\nsuper-space daemon\nsuper-space refresh|ping|quit\nsuper-space menu [route|dump|inspect]\nsuper-space search <query>\nsuper-space extension install <directory|github-url>\nsuper-space extension update|remove <name>\nsuper-space extension list\nsuper-space run-shell <name> [arguments...]\nsuper-space window <position> [window-id]\nsuper-space integration apply|uninstall\nUse builtin:settings, builtin:clipboard, or builtin:emoji for launcher routes."
             );
             return Ok(());
         }
@@ -107,7 +108,7 @@ fn main() -> iced::Result {
                 std::process::exit(1);
             };
             let status = std::process::Command::new("bash")
-                .args(["-lc", &command.command, "command-space"])
+                .args(["-lc", &command.command, "super-space"])
                 .args(&arguments[2..])
                 .status();
             std::process::exit(status.ok().and_then(|s| s.code()).unwrap_or(1));
@@ -116,7 +117,7 @@ fn main() -> iced::Result {
             if ipc::send("ping", "root").is_err() {
                 std::process::exit(1);
             }
-            println!("Command Space is running");
+            println!("Super Space is running");
             return Ok(());
         }
         "extension" => {
@@ -265,7 +266,7 @@ fn main() -> iced::Result {
         "toggle" | "show" | "summon" | "hide" | "close" | "daemon" | "refresh" | "quit" => {}
         _ if is_link => {}
         _ => {
-            eprintln!("Unknown command: {verb}. Use command-space --help.");
+            eprintln!("Unknown command: {verb}. Use super-space --help.");
             std::process::exit(2);
         }
     }
@@ -280,7 +281,7 @@ fn main() -> iced::Result {
         && std::env::var_os("DISPLAY").is_none()
     {
         let _ = std::process::Command::new("systemctl")
-            .args(["--user", "start", "command-space.service"])
+            .args(["--user", "start", "super-space.service"])
             .status();
         for _ in 0..100 {
             if ipc::send(
@@ -294,7 +295,7 @@ fn main() -> iced::Result {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         eprintln!(
-            "The Command Space desktop service is unavailable. Start an Omarchy graphical session and try again."
+            "The Super Space desktop service is unavailable. Start an Omarchy graphical session and try again."
         );
         std::process::exit(1);
     }
@@ -312,7 +313,7 @@ fn main() -> iced::Result {
         app::Launcher::update,
         app::Launcher::view,
     )
-    .title("Command Space")
+    .title("Super Space")
     .subscription(app::Launcher::subscription)
     .theme(app::Launcher::theme)
     .settings(iced::Settings {

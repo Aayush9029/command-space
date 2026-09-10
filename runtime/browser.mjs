@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 export function browserDirectory() {
-  return path.join(process.env.XDG_RUNTIME_DIR || path.join(os.tmpdir(), `command-space-${process.getuid()}`), "command-space-browser");
+  return path.join(process.env.XDG_RUNTIME_DIR || path.join(os.tmpdir(), `super-space-${process.getuid()}`), "super-space-browser");
 }
 
 function connections() {
@@ -26,7 +26,7 @@ export function browserAvailable() { return connections().length > 0; }
 
 export async function browserRequest(method, options = {}) {
   const connection = connections()[0];
-  if (!connection) throw new Error("Connect the Command Space browser extension to use browser commands");
+  if (!connection) throw new Error("Connect the Super Space browser extension to use browser commands");
   return new Promise((resolve, reject) => {
     const socket = net.createConnection(connection.socket);
     const chunks = [];
@@ -51,7 +51,7 @@ export async function browserRequest(method, options = {}) {
 }
 
 export const BrowserExtension = {
-  __commandSpaceCapability:"browser",
+  __superSpaceCapability:"browser",
   getTabs() { return browserRequest("getTabs"); },
   getContent(options = {}) {
     const format = options.format || "markdown";

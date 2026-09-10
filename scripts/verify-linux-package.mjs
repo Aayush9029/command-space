@@ -14,14 +14,14 @@ assert.ok(process.versions.bun,"Run this validator with Bun");
 const run = promisify(execFile);
 const archive = path.resolve(process.argv[2]);
 const name = path.basename(archive);
-const match = /^command-space-(\d+\.\d+\.\d+)-linux-(aarch64|x86_64)\.tar\.gz$/.exec(name);
+const match = /^super-space-(\d+\.\d+\.\d+)-linux-(aarch64|x86_64)\.tar\.gz$/.exec(name);
 assert.ok(match,"Package filename must contain its release version and architecture");
 const [,version,architecture] = match;
 assert.equal(architecture,{arm64:"aarch64",x64:"x86_64"}[process.arch],"Package validation must run on its native architecture");
 const bytes = await fs.readFile(archive);
 const checksum = await fs.readFile(`${archive}.sha256`,"utf8");
 assert.equal(checksum.trim(),`${createHash("sha256").update(bytes).digest("hex")}  ${name}`);
-const directory = await fs.mkdtemp(path.join(os.tmpdir(),"command-space-package-"));
+const directory = await fs.mkdtemp(path.join(os.tmpdir(),"super-space-package-"));
 
 async function verifyExtensionHost(bundle) {
   const extension = path.join(directory,"package-validation");
@@ -49,7 +49,7 @@ async function verifyExtensionHost(bundle) {
       });
       child.stdin.write(`${JSON.stringify({type:"launch",extension,command:"verify"})}\n`);
     });
-    const stored = JSON.parse(await fs.readFile(path.join(data,"command-space/extension-data/package-validation/storage.json"),"utf8"));
+    const stored = JSON.parse(await fs.readFile(path.join(data,"super-space/extension-data/package-validation/storage.json"),"utf8"));
     assert.equal(stored.result,"packaged TypeScript host works");
   } finally {
     clearTimeout(timeout);
@@ -63,19 +63,15 @@ async function verifyExtensionHost(bundle) {
 
 try {
   await run("python3",[fileURLToPath(new URL("../runtime/unpack-release.py",import.meta.url)),archive,directory],{timeout:30000});
-  const bundle = path.join(directory,"command-space");
-  const binary = path.join(bundle,"bin/command-space");
+  const bundle = path.join(directory,"super-space");
+  const binary = path.join(bundle,"bin/super-space");
   const {stdout} = await run(binary,["--version"],{timeout:10000});
-  assert.equal(stdout.trim(),`Command Space ${version}`);
-  for (const file of ["scripts/install.sh","scripts/install-linux.sh","scripts/start-daemon.sh","runtime/host.mjs","runtime/bun.lock","runtime/invocation.mjs","runtime/storage.mjs","runtime/updater.mjs","runtime/unpack-release.py","runtime/icon-catalog.mjs","runtime/icons/catalog.json","runtime/icons/LICENSE","README.md","LICENSE.md","docs/DEVELOPMENT.md","docs/PORTING.md","docs/assets/banner.png"]) await fs.access(path.join(bundle,file));
+  assert.equal(stdout.trim(),`Super Space ${version}`);
+  for (const file of ["scripts/install.sh","scripts/install-linux.sh","scripts/migrate-legacy.py","scripts/start-daemon.sh","runtime/host.mjs","runtime/bun.lock","runtime/invocation.mjs","runtime/storage.mjs","runtime/updater.mjs","runtime/unpack-release.py","runtime/icon-catalog.mjs","runtime/icons/catalog.json","runtime/icons/LICENSE","README.md","LICENSE.md","docs/DEVELOPMENT.md","docs/PORTING.md","docs/assets/banner.png"]) await fs.access(path.join(bundle,file));
   await run("bash",["-n",path.join(bundle,"scripts/install-linux.sh")]);
   await run("bash",["-n",path.join(bundle,"scripts/start-daemon.sh")]);
   const runtimeManifest = JSON.parse(await fs.readFile(path.join(bundle,"runtime/package.json"),"utf8"));
-  const legacyLock = JSON.parse(await fs.readFile(path.join(bundle,"runtime/package-lock.json"),"utf8"));
-  assert.equal(legacyLock.lockfileVersion,3,"The 1.0.1 updater compatibility artifact must remain a valid lockfile");
-  assert.deepEqual(legacyLock.packages[""].dependencies,runtimeManifest.dependencies,"The updater compatibility artifact must match the bundled dependency versions");
   for (const [dependency,version] of Object.entries(runtimeManifest.dependencies)) {
-    assert.equal(legacyLock.packages[`node_modules/${dependency}`].version,version);
     const installed = JSON.parse(await fs.readFile(path.join(bundle,"runtime/node_modules",dependency,"package.json"),"utf8"));
     assert.equal(installed.version,version,"Packaged dependencies must match the frozen Bun installation");
   }

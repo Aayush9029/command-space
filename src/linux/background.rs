@@ -339,7 +339,7 @@ fn menu_nodes(nodes: &[Node], id: u64) -> Vec<MenuItem<ExtensionTray>> {
 impl ksni::Tray for ExtensionTray {
     const MENU_ON_ACTIVATE: bool = true;
     fn id(&self) -> String {
-        format!("command-space-extension-{}", self.id)
+        format!("super-space-extension-{}", self.id)
     }
     fn title(&self) -> String {
         if self.root.text("title").is_empty() {

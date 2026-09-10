@@ -9,7 +9,7 @@ import { run, webAppArguments, tuiArguments, transcodeArguments } from "../src/w
 const installed = fsSync.existsSync("/usr/share/omarchy/bin/omarchy-webapp-install");
 
 test("original Omarchy installers and transcode complete without opening a legacy picker", { skip: !installed }, async t => {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), "command-space-original-workflow-"));
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), "super-space-original-workflow-"));
   t.after(() => fs.rm(home, { recursive: true, force: true }));
   const bin = path.join(home, "bin");
   await fs.mkdir(bin);

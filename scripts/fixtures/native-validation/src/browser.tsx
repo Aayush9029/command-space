@@ -7,7 +7,7 @@ export default function Command() {
     (async () => {
       if (!environment.canAccess(BrowserExtension)) throw new Error("Browser bridge is disconnected");
       const tabs = await BrowserExtension.getTabs();
-      const tab = tabs.find(tab => tab.title === "Command Space Browser Fixture");
+      const tab = tabs.find(tab => tab.title === "Super Space Browser Fixture");
       if (!tab) throw new Error("Open the browser fixture first");
       const text = await BrowserExtension.getContent({tabId:tab.id,format:"text",cssSelector:"#sample"});
       const html = await BrowserExtension.getContent({tabId:tab.id,format:"html",cssSelector:"#sample"});

@@ -10,13 +10,13 @@ fn quoted(value: &str) -> String {
 
 pub fn bindings(config: &Config) -> Result<String, String> {
     let binary = home()
-        .join(".local/bin/command-space")
+        .join(".local/bin/super-space")
         .to_string_lossy()
         .into_owned();
     let binary = shell_quote(&binary);
     let mut keys = HashSet::new();
     let mut output = String::from(
-        "o.window(\"^command-space$\", { float = true, center = true, border_size = 0, rounding = 0, no_anim = true, opacity = \"1 1\", tag = \"-default-opacity\" })\n",
+        "o.window(\"^super-space$\", { float = true, center = true, border_size = 0, rounding = 0, no_anim = true, opacity = \"1 1\", tag = \"-default-opacity\" })\n",
     );
     let mut bind = |key: &str, title: &str, command: String| -> Result<(), String> {
         if key.trim().is_empty()
@@ -42,7 +42,7 @@ pub fn bindings(config: &Config) -> Result<String, String> {
     };
     bind(
         &config.toggle_hotkey,
-        "Command Space",
+        "Super Space",
         format!("{binary} toggle"),
     )?;
     bind(
@@ -129,17 +129,17 @@ pub fn apply(config: &Config) -> Result<(), String> {
         return Err("Omarchy's Hyprland Lua configuration was not found".into());
     }
     fs::create_dir_all(state_dir().join("backups")).map_err(|e| e.to_string())?;
-    for name in ["hyprland.lua", "command-space.lua"] {
+    for name in ["hyprland.lua", "super-space.lua"] {
         let original = hypr.join(name);
         let backup = state_dir().join("backups").join(name);
         if original.exists() && !backup.exists() {
             fs::copy(&original, backup).map_err(|e| e.to_string())?;
         }
     }
-    fs::write(hypr.join("command-space.lua"), lua).map_err(|e| e.to_string())?;
+    fs::write(hypr.join("super-space.lua"), lua).map_err(|e| e.to_string())?;
     let mut main = fs::read_to_string(hypr.join("hyprland.lua")).map_err(|e| e.to_string())?;
-    if !main.contains("require(\"hypr.command-space\")") {
-        main.push_str("\nrequire(\"hypr.command-space\")\n");
+    if !main.contains("require(\"hypr.super-space\")") {
+        main.push_str("\nrequire(\"hypr.super-space\")\n");
         fs::write(hypr.join("hyprland.lua"), main).map_err(|e| e.to_string())?;
     }
     if installed() {
@@ -153,7 +153,7 @@ pub fn apply(config: &Config) -> Result<(), String> {
                 } else {
                     "disable"
                 },
-                "command-space.service",
+                "super-space.service",
             ])
             .status()
             .map_err(|e| e.to_string())?;
@@ -167,30 +167,30 @@ pub fn apply(config: &Config) -> Result<(), String> {
 
 pub fn installed() -> bool {
     home()
-        .join(".config/systemd/user/command-space.service")
+        .join(".config/systemd/user/super-space.service")
         .exists()
 }
 
 pub fn uninstall() -> Result<(), String> {
     browser_bridge(true)?;
     let _ = Command::new("systemctl")
-        .args(["--user", "disable", "--now", "command-space.service"])
+        .args(["--user", "disable", "--now", "super-space.service"])
         .status();
-    update_bar_widget("command-space.launcher", "omarchy.menu")?;
-    let plugin = home().join(".config/omarchy/plugins/command-space.launcher");
+    update_bar_widget("super-space.launcher", "omarchy.menu")?;
+    let plugin = home().join(".config/omarchy/plugins/super-space.launcher");
     if plugin.exists() {
         fs::remove_dir_all(plugin).map_err(|e| e.to_string())?;
     }
     let path = home().join(".config/hypr/hyprland.lua");
     let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    fs::write(path, text.replace("require(\"hypr.command-space\")", ""))
+    fs::write(path, text.replace("require(\"hypr.super-space\")", ""))
         .map_err(|e| e.to_string())?;
     for path in [
-        home().join(".config/hypr/command-space.lua"),
-        home().join(".local/bin/command-space"),
-        home().join(".local/bin/command-space-menu"),
-        home().join(".config/systemd/user/command-space.service"),
-        home().join(".local/share/applications/command-space.desktop"),
+        home().join(".config/hypr/super-space.lua"),
+        home().join(".local/bin/super-space"),
+        home().join(".local/bin/super-space-menu"),
+        home().join(".config/systemd/user/super-space.service"),
+        home().join(".local/share/applications/super-space.desktop"),
     ] {
         if path.exists() {
             fs::remove_file(path).map_err(|e| e.to_string())?;
@@ -295,7 +295,7 @@ fn update_bar_widget(from: &str, to: &str) -> Result<(), String> {
         if !backup.exists() {
             fs::write(backup, original).map_err(|e| e.to_string())?;
         }
-        let temporary = path.with_extension("command-space.tmp");
+        let temporary = path.with_extension("super-space.tmp");
         fs::write(
             &temporary,
             serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?,
@@ -307,7 +307,7 @@ fn update_bar_widget(from: &str, to: &str) -> Result<(), String> {
 }
 
 fn install_bar_widget() -> Result<(), String> {
-    let folder = home().join(".config/omarchy/plugins/command-space.launcher");
+    let folder = home().join(".config/omarchy/plugins/super-space.launcher");
     fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
     fs::write(
         folder.join("manifest.json"),
@@ -319,7 +319,7 @@ fn install_bar_widget() -> Result<(), String> {
         include_str!("../../scripts/omarchy-bar/BarWidget.qml"),
     )
     .map_err(|e| e.to_string())?;
-    update_bar_widget("omarchy.menu", "command-space.launcher")?;
+    update_bar_widget("omarchy.menu", "super-space.launcher")?;
     let _ = Command::new("systemd-run")
         .args([
             "--user",

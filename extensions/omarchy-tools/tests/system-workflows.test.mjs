@@ -13,7 +13,7 @@ import { readBranding, writeBranding, resetBranding } from "../src/branding.mjs"
 const assetsPath = fileURLToPath(new URL("../assets", import.meta.url));
 const devices = JSON.stringify({ blockdevices: [{ name: "/dev/vda", children: [{ path: "/dev/vda2", fstype: "crypto_LUKS", size: "100G", label: "System" }] }] });
 async function temporary(t) {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), "command-space-system-form-"));
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), "super-space-system-form-"));
   t.after(() => fs.rm(home, { recursive: true, force: true }));
   return home;
 }

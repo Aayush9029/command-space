@@ -11,13 +11,13 @@ assert.ok(process.versions.bun, "Run this validator with Bun");
 const run = promisify(execFile);
 const archive = path.resolve(process.argv[2]);
 const name = path.basename(archive);
-const [, version, architecture] = /^command-space-(\d+\.\d+\.\d+)-linux-(aarch64|x86_64)\.tar\.gz$/.exec(name) || [];
+const [, version, architecture] = /^super-space-(\d+\.\d+\.\d+)-linux-(aarch64|x86_64)\.tar\.gz$/.exec(name) || [];
 assert.ok(version, "Supply a Linux release archive");
 const installer = fileURLToPath(new URL("install.sh", import.meta.url));
 const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "cs-bootstrap-"));
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
-const api = "https://api.github.com/repos/Aayush9029/command-space/releases/latest";
-const releaseUrl = `https://github.com/Aayush9029/command-space/releases/download/v${version}/${name}`;
+const api = "https://api.github.com/repos/Aayush9029/super-space/releases/latest";
+const releaseUrl = `https://github.com/Aayush9029/super-space/releases/download/v${version}/${name}`;
 const bunAsset = architecture === "aarch64" ? "bun-linux-aarch64" : "bun-linux-x64-baseline";
 const bunUrl = `https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/${bunAsset}.zip`;
 let checks = 0;
@@ -26,15 +26,15 @@ try {
   const bundleRoot = path.join(temporary, "bundle");
   await fs.mkdir(bundleRoot);
   await run("python3", [fileURLToPath(new URL("../runtime/unpack-release.py", import.meta.url)), archive, bundleRoot]);
-  const bundle = path.join(bundleRoot, "command-space");
+  const bundle = path.join(bundleRoot, "super-space");
   await fs.writeFile(path.join(bundle, "scripts/install-linux.sh"), `#!/bin/bash
 set -euo pipefail
 [[ "$#" == 1 && "$1" == --prebuilt ]]
 printf 'installed\\n' > "$HOME/install-result"
-printf '%s\\n' "$*" >> "$COMMAND_SPACE_BOOTSTRAP_CALLS"
+printf '%s\\n' "$*" >> "$SUPER_SPACE_BOOTSTRAP_CALLS"
 `);
   const fixtureArchive = path.join(temporary, "fixture.tar.gz");
-  await run("tar", ["--format=ustar", "--dereference", "--hard-dereference", "-czf", fixtureArchive, "-C", bundleRoot, "command-space"]);
+  await run("tar", ["--format=ustar", "--dereference", "--hard-dereference", "-czf", fixtureArchive, "-C", bundleRoot, "super-space"]);
   const validBytes = await fs.readFile(fixtureArchive);
   const maliciousArchive = async kind => {
     const destination = path.join(temporary, `${kind}.tar.gz`);
@@ -43,11 +43,11 @@ source,destination,kind=sys.argv[1:]
 with tarfile.open(source,'r:gz') as original, tarfile.open(destination,'w:gz',format=tarfile.USTAR_FORMAT) as target:
  for item in original:
   target.addfile(item,original.extractfile(item) if item.isfile() else None)
- item=tarfile.TarInfo('command-space/extra')
- if kind=='traversal': item.name='command-space/../../escaped'
+ item=tarfile.TarInfo('super-space/extra')
+ if kind=='traversal': item.name='super-space/../../escaped'
  if kind=='symlink': item.type=tarfile.SYMTYPE; item.linkname='../../escaped'
- if kind=='hardlink': item.type=tarfile.LNKTYPE; item.linkname='command-space/bin/command-space'
- if kind=='duplicate': item.name='command-space/bin/command-space'
+ if kind=='hardlink': item.type=tarfile.LNKTYPE; item.linkname='super-space/bin/super-space'
+ if kind=='duplicate': item.name='super-space/bin/super-space'
  target.addfile(item,io.BytesIO(b''))
 `, fixtureArchive, destination, kind]);
     return fs.readFile(destination);
@@ -64,7 +64,7 @@ with tarfile.open(source,'r:gz') as original, tarfile.open(destination,'w:gz',fo
 import json,os,pathlib,shutil,sys
 command=pathlib.Path(sys.argv[0]).name
 args=sys.argv[1:]
-with open(os.environ['COMMAND_SPACE_BOOTSTRAP_CALLS'],'a') as log: log.write(json.dumps([command,*args])+'\\n')
+with open(os.environ['SUPER_SPACE_BOOTSTRAP_CALLS'],'a') as log: log.write(json.dumps([command,*args])+'\\n')
 if command=='uname': print(os.environ.get('CS_TEST_OS','Linux') if args==['-s'] else os.environ['CS_TEST_ARCH'])
 elif command=='id': print(os.environ.get('CS_TEST_UID','1000'))
 elif command=='systemctl':
@@ -92,7 +92,7 @@ elif command=='curl':
     await fs.mkdir(path.join(home, ".config/hypr"), {recursive:true});
     await fs.mkdir(tmp);
     if (!options.noOmarchy) await fs.writeFile(path.join(home, ".config/hypr/hyprland.lua"), "existing configuration\n");
-    const preserved = path.join(home, ".local/share/command-space/bin/command-space");
+    const preserved = path.join(home, ".local/share/super-space/bin/super-space");
     await fs.mkdir(path.dirname(preserved), {recursive:true});
     await fs.writeFile(preserved, "existing app");
     if (!options.noBun) {
@@ -111,7 +111,7 @@ elif command=='curl':
     const release = {tag_name:`v${version}`, draft:false, prerelease:false, assets:[name, `${name}.sha256`].map((asset, index) => ({name:asset, browser_download_url:`${releaseUrl}${index ? ".sha256" : ""}`})), ...options.metadata};
     await fs.writeFile(metadataFile, JSON.stringify(release));
     await fs.writeFile(transportFile, JSON.stringify({[api]:metadataFile, [releaseUrl]:archiveFile, [`${releaseUrl}.sha256`]:checksumFile, ...(options.bunZip ? {[bunUrl]:options.bunZip} : {})}));
-    const env = {...process.env, HOME:home, PATH:helpers, TMPDIR:tmp, CS_TEST_ARCH:architecture, CS_TEST_TRANSPORT:transportFile, COMMAND_SPACE_BOOTSTRAP_CALLS:callsFile, ...options.env};
+    const env = {...process.env, HOME:home, PATH:helpers, TMPDIR:tmp, CS_TEST_ARCH:architecture, CS_TEST_TRANSPORT:transportFile, SUPER_SPACE_BOOTSTRAP_CALLS:callsFile, ...options.env};
     for (const key of ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "BUN_INSTALL"]) delete env[key];
     let error;
     try { await run("/bin/bash", [installer], {env, timeout:60000}); } catch (value) { error = value; }

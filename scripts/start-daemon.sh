@@ -10,7 +10,7 @@ for attempt in {1..60}; do
   display_number=${display_number#*:}
   display_number=${display_number%%.*}
   if [[ -n "${WAYLAND_DISPLAY:-}" && -S "${XDG_RUNTIME_DIR:-/run/user/$UID}/$WAYLAND_DISPLAY" ]] || [[ -z "${WAYLAND_DISPLAY:-}" && -n "${DISPLAY:-}" && -S "/tmp/.X11-unix/X$display_number" ]]; then
-    exec "$HOME/.local/bin/command-space" daemon
+    exec "$HOME/.local/bin/super-space" daemon
   fi
   sleep 0.5
 done

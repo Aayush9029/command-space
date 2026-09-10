@@ -1,6 +1,6 @@
-# Working on Command Space
+# Working on Super Space
 
-Command Space is a native launcher for Omarchy, built with Rust and Iced. Bun runs TypeScript and TSX extensions through a local protocol. The app targets Linux and Hyprland. Read [Development](docs/DEVELOPMENT.md) for setup and [Compatibility](docs/PORTING.md) for extension support.
+Super Space is a native launcher for Omarchy, built with Rust and Iced. Bun runs TypeScript and TSX extensions through a local protocol. The app targets Linux and Hyprland. Read [Development](docs/DEVELOPMENT.md) for setup and [Compatibility](docs/PORTING.md) for extension support.
 
 ## Repository map
 
@@ -25,7 +25,7 @@ Read the relevant modules before editing. Extension exports and catalog entries 
 
 ## Work in the VM
 
-Build and test Linux changes through `scripts/dev.sh`. It synchronizes the Mac checkout to `~/Developer/command-space` on the SSH host in `COMMAND_SPACE_VM`, defaulting to `omarchy`. Build artifacts stay on the guest's native filesystem.
+Build and test Linux changes through `scripts/dev.sh`. It synchronizes the Mac checkout to `~/Developer/super-space` on the SSH host in `SUPER_SPACE_VM`, defaulting to `omarchy`. Build artifacts stay on the guest's native filesystem.
 
 ```sh
 scripts/dev.sh cargo fmt --all --check
@@ -65,7 +65,7 @@ For installer and packaging changes, run:
 scripts/dev.sh bash scripts/package-linux.sh
 ```
 
-This validates the archive and real installer in disposable homes. Keep the packaged README screenshot and documentation paths aligned with the validator. The compatibility manifest in `scripts/compat/` lets the published 1.0.1 updater recognize newer archives; Bun remains the active dependency manager.
+This validates the archive and real installer in disposable homes. Keep the packaged README screenshot and documentation paths aligned with the validator. Legacy installations migrate through `scripts/migrate-legacy.py`; keep its rollback and data-preservation tests intact.
 
 ## Keep the repository clear
 

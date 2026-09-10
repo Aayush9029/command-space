@@ -170,7 +170,7 @@ impl Menu {
             return title;
         }
         if route == "root" {
-            return "Command Space".into();
+            return "Super Space".into();
         }
         self.items.iter().find(|i| i.id == route).map_or_else(
             || route.into(),

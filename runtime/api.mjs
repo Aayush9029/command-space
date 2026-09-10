@@ -9,7 +9,7 @@ import { Clipboard } from "./clipboard.mjs";
 import {getApplications} from "./applications.mjs";
 import {readStore, updateStore} from "./storage.mjs";
 
-const bridge = () => globalThis.__commandSpace;
+const bridge = () => globalThis.__superSpace;
 const component = name => {
   const Component = props => {
     const { children, actions, detail, metadata, searchBarAccessory, ...rest } = props;
@@ -202,8 +202,8 @@ export async function launchCommand(options) {
 
 function encodeContext(value, ancestors = new Set()) {
   if (!value || typeof value !== "object") return value;
-  if (value instanceof Date) return { __commandSpaceLaunchValue: "Date", value: value.toISOString() };
-  if (Buffer.isBuffer(value)) return { __commandSpaceLaunchValue: "Buffer", value: value.toString("base64") };
+  if (value instanceof Date) return { __superSpaceLaunchValue: "Date", value: value.toISOString() };
+  if (Buffer.isBuffer(value)) return { __superSpaceLaunchValue: "Buffer", value: value.toString("base64") };
   if (ancestors.has(value)) throw new Error("Command launch context must be JSON serializable");
   ancestors = new Set(ancestors).add(value);
   if (Array.isArray(value)) return value.map(item => encodeContext(item, ancestors));

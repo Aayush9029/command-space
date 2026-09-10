@@ -23,12 +23,12 @@ const renderStack = () => renderer.render(React.createElement(React.Fragment, nu
   ...stack.map((element, index) => React.createElement("NavigationPage", { key: index, active: index === stack.length - 1 }, element))));
 let requestId = 0;
 const pending = new Map();
-globalThis.__commandSpace = {
+globalThis.__superSpace = {
   emit,
   environment: {},
   preferences: {},
-  ai: JSON.parse(process.env.COMMAND_SPACE_AI_CONFIG || "{}"),
-  launcherPath: process.env.COMMAND_SPACE_BINARY || "command-space",
+  ai: JSON.parse(process.env.SUPER_SPACE_AI_CONFIG || "{}"),
+  launcherPath: process.env.SUPER_SPACE_BINARY || "super-space",
   formValues: values => renderer.formValues(values),
   storedFormValues: values => renderer.storedFormValues(values),
   push(element, onPop) { stack.push(element); popCallbacks.push(onPop); renderStack(); },
@@ -53,7 +53,7 @@ async function launch(options) {
   const command = manifest.commands?.find(command => command.name === options.command);
   if (!command) throw new Error(`Command ${options.command} is not declared in package.json`);
   const home = process.env.HOME;
-  const support = path.join(process.env.XDG_DATA_HOME || path.join(home, ".local/share"), "command-space", "extension-data", manifest.name);
+  const support = path.join(process.env.XDG_DATA_HOME || path.join(home, ".local/share"), "super-space", "extension-data", manifest.name);
   await fs.mkdir(support, { recursive: true, mode: 0o700 });
   const preferences = {};
   let stored = {};
@@ -62,10 +62,10 @@ async function launch(options) {
   for (const preference of [...(manifest.preferences || []), ...(command.preferences || [])]) if (preference.default !== undefined) preferences[preference.name] = preference.default;
   Object.assign(preferences, stored.extension || stored, stored.commands?.[command.name] || {});
   Object.assign(preferences, options.preferences || {});
-  globalThis.__commandSpace.preferences = preferences;
-  globalThis.__commandSpace.extensionPath = extensionPath;
-  globalThis.__commandSpace.environment = { commandName: command.name, extensionName: manifest.name, ownerOrAuthorName: manifest.owner || manifest.author || "", assetsPath: path.join(extensionPath, "assets"), supportPath: support, isDevelopment: process.env.COMMAND_SPACE_DEVELOPMENT === "1", appearance: process.env.COMMAND_SPACE_APPEARANCE || "dark", textSize: "medium", raycastVersion: "1.0.0", commandMode: command.mode || "view", launchType: options.launchType || "userInitiated", canAccess: capability => capability?.__commandSpaceCapability === "windows" || (capability?.__commandSpaceCapability === "ai" && aiAvailable()) || (capability?.__commandSpaceCapability === "browser" && browserAvailable()) };
-  globalThis.__commandSpace.preferencesPanel = () => {
+  globalThis.__superSpace.preferences = preferences;
+  globalThis.__superSpace.extensionPath = extensionPath;
+  globalThis.__superSpace.environment = { commandName: command.name, extensionName: manifest.name, ownerOrAuthorName: manifest.owner || manifest.author || "", assetsPath: path.join(extensionPath, "assets"), supportPath: support, isDevelopment: process.env.SUPER_SPACE_DEVELOPMENT === "1", appearance: process.env.SUPER_SPACE_APPEARANCE || "dark", textSize: "medium", raycastVersion: "1.0.0", commandMode: command.mode || "view", launchType: options.launchType || "userInitiated", canAccess: capability => capability?.__superSpaceCapability === "windows" || (capability?.__superSpaceCapability === "ai" && aiAvailable()) || (capability?.__superSpaceCapability === "browser" && browserAvailable()) };
+  globalThis.__superSpace.preferencesPanel = () => {
     const panel = React.createElement(SetupForm, { title: `${manifest.title || manifest.name} Preferences`, fields: definitions, values: preferences, submitTitle: "Save Preferences", onSubmit: async values => {
       const extensionValues = Object.fromEntries((manifest.preferences || []).map(field => [field.name, values[field.name]]));
       const commandValues = Object.fromEntries((command.preferences || []).map(field => [field.name, values[field.name]]));
@@ -75,10 +75,10 @@ async function launch(options) {
       });
       emit({type:"relaunch",options:{ ...options, openPreferences: false, setupComplete: false }});
     } });
-    globalThis.__commandSpace.push(panel);
+    globalThis.__superSpace.push(panel);
   };
   if (options.openPreferences || definitions.some(field => field.required && (preferences[field.name] === undefined || preferences[field.name] === ""))) {
-    globalThis.__commandSpace.preferencesPanel(); return;
+    globalThis.__superSpace.preferencesPanel(); return;
   }
   const missingArguments = command.arguments?.some(field => field.required && (options.arguments?.[field.name] === undefined || options.arguments[field.name] === "" || options.arguments[field.name] === null));
   if (command.arguments?.length && !options.setupComplete && (missingArguments || (options.arguments == null && options.launchType !== "background"))) {
@@ -93,18 +93,18 @@ async function launch(options) {
   const result = await build({
     entryPoints: [entry], bundle: true, write: false, platform: "node", format: "cjs", target: "node22", jsx: "automatic", sourcemap: "inline",
     nodePaths: [path.join(runtimePath, "node_modules")],
-    plugins: [{ name: "command-space-api", setup(build) {
+    plugins: [{ name: "super-space-api", setup(build) {
       build.onResolve({ filter: /^@raycast\/api$/ }, () => ({ path: path.join(runtimePath, "api.mjs") }));
       build.onResolve({ filter: /^react(?:\/.*)?$/ }, args => ({ path: require.resolve(args.path), external: true }));
     } }],
   });
-  const filename = path.join(extensionPath, `.command-space-${command.name}.cjs`);
+  const filename = path.join(extensionPath, `.super-space-${command.name}.cjs`);
   const module = { exports: {} };
   const extensionRequire = createRequire(path.join(extensionPath, "package.json"));
   new Function("require", "module", "exports", "__filename", "__dirname", result.outputFiles[0].text)(extensionRequire, module, module.exports, filename, extensionPath);
   const exported = module.exports.default;
   if (typeof exported !== "function") throw new Error("Extension command must have a default function export");
-  const props = { arguments: options.arguments || {}, launchType: globalThis.__commandSpace.environment.launchType, launchContext: decodeContext(options.launchContext), fallbackText: options.fallbackText };
+  const props = { arguments: options.arguments || {}, launchType: globalThis.__superSpace.environment.launchType, launchContext: decodeContext(options.launchContext), fallbackText: options.fallbackText };
   if (command.mode === "no-view") {
     await exported(props); emit({ type: "done" });
   } else {
@@ -116,8 +116,8 @@ function decodeContext(value) {
   if (!value || typeof value !== "object") return value;
   if (Array.isArray(value)) return value.map(decodeContext);
   if (Object.keys(value).length === 2 && typeof value.value === "string") {
-    if (value.__commandSpaceLaunchValue === "Date") return new Date(value.value);
-    if (value.__commandSpaceLaunchValue === "Buffer") return Buffer.from(value.value, "base64");
+    if (value.__superSpaceLaunchValue === "Date") return new Date(value.value);
+    if (value.__superSpaceLaunchValue === "Buffer") return Buffer.from(value.value, "base64");
   }
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, decodeContext(item)]));
 }
@@ -134,8 +134,8 @@ for await (const line of input) {
       launch(message).catch(report).finally(() => emit({type:"invocation-ready"}));
     }
     else if (message.type === "event") renderer.invoke(message.callback, message.args || [], message).catch(report);
-    else if (message.type === "pop") globalThis.__commandSpace.pop();
-    else if (message.type === "preferences") globalThis.__commandSpace.preferencesPanel();
+    else if (message.type === "pop") globalThis.__superSpace.pop();
+    else if (message.type === "preferences") globalThis.__superSpace.preferencesPanel();
     else if (message.type === "response") { const request = pending.get(message.id); pending.delete(message.id); if (message.error) request?.reject(new Error(message.error)); else request?.resolve(message.value); }
     else if (message.type === "stop") break;
   } catch (error) { report(error); }

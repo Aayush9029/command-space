@@ -13,14 +13,14 @@ const runtime = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 async function fixture(t, mode, source, metadata = {}) {
   const {command: definition, launch: launchOptions, ...manifestFields} = metadata;
-  const home = await mkdtemp(path.join(tmpdir(), "command-space-extension-"));
+  const home = await mkdtemp(path.join(tmpdir(), "super-space-extension-"));
   const extension = path.join(home, "fixture");
   await mkdir(path.join(extension, "src"), { recursive: true });
   await writeFile(path.join(extension, "package.json"), JSON.stringify({ name: "fixture", ...manifestFields, commands: [{ name: "command", title: "Fixture", mode, ...definition }] }));
   await writeFile(path.join(extension, "src/command.tsx"), source);
   await mkdir(path.join(home, "bin"));
   await writeFile(path.join(home, "bin/xdg-open"), "#!/bin/sh\nexit 0\n", {mode:0o755});
-  const process = spawn(globalThis.process.execPath, [path.join(runtime, "host.mjs")], { env: { ...globalThis.process.env, HOME: home, COMMAND_SPACE_TOKEN_STORAGE:"file", PATH:`${home}/bin:${globalThis.process.env.PATH}`, XDG_DATA_HOME: path.join(home, "data") } });
+  const process = spawn(globalThis.process.execPath, [path.join(runtime, "host.mjs")], { env: { ...globalThis.process.env, HOME: home, SUPER_SPACE_TOKEN_STORAGE:"file", PATH:`${home}/bin:${globalThis.process.env.PATH}`, XDG_DATA_HOME: path.join(home, "data") } });
   const messages = [];
   let stderr = "";
   const lines = readline.createInterface({ input: process.stdout });
@@ -85,7 +85,7 @@ test("OAuth browser failure cancels the pending callback request", async t => {
   host.send({type:"response",id:consent.id,value:true});
   await host.wait(m => m.type === "cancel-request");
   await host.wait(m => m.type === "done");
-  const saved = JSON.parse(await readFile(path.join(host.home,"data/command-space/extension-data/fixture/storage.json"),"utf8"));
+  const saved = JSON.parse(await readFile(path.join(host.home,"data/super-space/extension-data/fixture/storage.json"),"utf8"));
   assert.match(saved.error,/Could not open/);
 });
 
@@ -97,7 +97,7 @@ test("no-view confirmations keep reading responses while the command waits", asy
   const request = await host.wait(message => message.type === "request" && message.kind === "confirm");
   host.send({ type: "response", id: request.id, value: true });
   await host.wait(message => message.type === "done");
-  const saved = JSON.parse(await readFile(path.join(host.home, "data/command-space/extension-data/fixture/storage.json"), "utf8"));
+  const saved = JSON.parse(await readFile(path.join(host.home, "data/super-space/extension-data/fixture/storage.json"), "utf8"));
   assert.equal(saved.confirmed, true);
 });
 
@@ -126,7 +126,7 @@ test("desktop application launches use a separate process group from their exten
   const first = await host.wait(m => m.type === 'render' && nodes(m.tree).some(n => n.type === 'Action'));
   host.send({type:'event',callback:nodes(first.tree).find(n=>n.type==='Action').props.onAction.$callback,args:[]});
   await host.wait(m => m.type === 'render' && nodes(m.tree).some(n => n.props.title === 'Opened'));
-  const saved = JSON.parse(await readFile(path.join(host.home,'data/command-space/extension-data/fixture/storage.json'),'utf8'));
+  const saved = JSON.parse(await readFile(path.join(host.home,'data/super-space/extension-data/fixture/storage.json'),'utf8'));
   assert.match(saved.groups.worker,/^\d+$/);
   assert.match(saved.groups.application,/^\d+$/);
   assert.notEqual(saved.groups.application,saved.groups.worker);
@@ -136,7 +136,7 @@ test("TypeScript no-view commands use real persistent storage and toasts", async
   const host = await fixture(t, "no-view", `import { LocalStorage, showHUD } from '@raycast/api';
     export default async function Command() { await LocalStorage.setItem('answer', 42); await showHUD('Saved'); }`);
   await host.wait(message => message.type === "done");
-  const saved = JSON.parse(await readFile(path.join(host.home, "data/command-space/extension-data/fixture/storage.json"), "utf8"));
+  const saved = JSON.parse(await readFile(path.join(host.home, "data/super-space/extension-data/fixture/storage.json"), "utf8"));
   assert.equal(saved.answer, 42);
   assert.ok(host.messages.some(message => message.type === "toast" && message.title === "Saved"));
 });
@@ -171,7 +171,7 @@ test("command arguments render a form, validate required values, and reach the c
   const submit = nodes(invalid.tree).find(node => node.type === "Action.SubmitForm");
   host.send({ type: "event", callback: submit.props.onAction.$callback, args: [{ topic: "Omarchy" }] });
   await host.wait(message => message.type === "done");
-  const saved = JSON.parse(await readFile(path.join(host.home, "data/command-space/extension-data/fixture/storage.json"), "utf8"));
+  const saved = JSON.parse(await readFile(path.join(host.home, "data/super-space/extension-data/fixture/storage.json"), "utf8"));
   assert.deepEqual(saved.arguments, { topic: "Omarchy" });
 });
 
@@ -186,7 +186,7 @@ test("partially supplied launch arguments retain values while requesting missing
   const submit = nodes(first.tree).find(n => n.type === 'Action.SubmitForm');
   host.send({type:'event',callback:submit.props.onAction.$callback,args:[{topic:'Omarchy',scope:'Linux'}]});
   await host.wait(m => m.type === 'done');
-  const saved = JSON.parse(await readFile(path.join(host.home,'data/command-space/extension-data/fixture/storage.json'),'utf8'));
+  const saved = JSON.parse(await readFile(path.join(host.home,'data/super-space/extension-data/fixture/storage.json'),'utf8'));
   assert.deepEqual(saved.arguments,{topic:'Omarchy',scope:'Linux'});
 });
 
@@ -201,7 +201,7 @@ test("programmatic commands preserve launch type, arguments, fallback text, owne
   await host.wait(m => m.type === 'done');
   host.send({...event,type:'launch',extension:host.extension,command:event.name});
   await host.wait(m => m.type === 'done' && host.messages.filter(m => m.type === 'done').length === 2);
-  const saved = JSON.parse(await readFile(path.join(host.home,'data/command-space/extension-data/fixture/storage.json'),'utf8'));
+  const saved = JSON.parse(await readFile(path.join(host.home,'data/super-space/extension-data/fixture/storage.json'),'utf8'));
   assert.deepEqual(saved.launch,{arguments:{topic:'Omarchy'},launchType:'background',environmentType:'background',owner:'fixture-owner',fallback:'find this',date:true,iso:'2026-09-09T12:00:00.000Z',buffer:true,text:'Linux',literal:{type:'Buffer',data:[1,2]}});
 });
 
@@ -213,7 +213,7 @@ test("launchCommand rejects missing commands, mismatched owners, invalid types, 
       } await LocalStorage.setItem('errors',errors);
     }`, {author:'fixture-author'});
   await host.wait(m => m.type === 'done');
-  const saved = JSON.parse(await readFile(path.join(host.home,'data/command-space/extension-data/fixture/storage.json'),'utf8'));
+  const saved = JSON.parse(await readFile(path.join(host.home,'data/super-space/extension-data/fixture/storage.json'),'utf8'));
   assert.match(saved.errors[0],/not installed/);
   assert.match(saved.errors[1],/not installed/);
   assert.match(saved.errors[2],/different owner/);
@@ -231,7 +231,7 @@ test("background refreshes skip optional argument setup and execute serially wit
     }`, {command:{arguments:[{name:'optional',type:'text',required:false}]},launch:{launchType:'background'}});
   for (const id of [1,2,3]) host.send({type:'launch',extension:host.extension,command:'command',launchType:'background',launchContext:{id}});
   await host.wait(m => m.type === 'done' && host.messages.filter(m => m.type === 'done').length === 4);
-  const saved = JSON.parse(await readFile(path.join(host.home,'data/command-space/extension-data/fixture/storage.json'),'utf8'));
+  const saved = JSON.parse(await readFile(path.join(host.home,'data/super-space/extension-data/fixture/storage.json'),'utf8'));
   assert.deepEqual(saved.runs,[0,1,2,3].map(id=>({id,moduleRuns:1,type:'background',arguments:{}})));
   assert.equal(host.messages.filter(m => m.type === 'render').length,0);
 });
@@ -249,7 +249,7 @@ test("completed background invocations discard unmanaged timers and subprocesses
       await new Promise(resolve=>setTimeout(resolve,45));
       const runs=await LocalStorage.getItem('runs')||[];runs.push({run,pid:process.pid,child:child.pid});await LocalStorage.setItem('runs',runs);
     }`, {launch:{launchType:'background'}});
-  const storage = path.join(host.home,'data/command-space/extension-data/fixture/storage.json');
+  const storage = path.join(host.home,'data/super-space/extension-data/fixture/storage.json');
   await host.wait(m => m.type === 'done');
   const first = JSON.parse(await readFile(storage,'utf8')).runs[0];
   const ticks = await readFile(path.join(host.home,'ticks'),'utf8');
@@ -274,7 +274,7 @@ test("a scheduled refresh replaces an unresponsive background invocation without
       const child=spawn('sleep',['60'],{stdio:'ignore'});await LocalStorage.setItem('first',{pid:process.pid,child:child.pid});await showHUD('Background started');while(true){}
     }`,{launch:{launchType:'background'}});
   await host.wait(m=>m.type==='toast' && m.title==='Background started');
-  const file = path.join(host.home,'data/command-space/extension-data/fixture/storage.json');
+  const file = path.join(host.home,'data/super-space/extension-data/fixture/storage.json');
   const {first} = JSON.parse(await readFile(file,'utf8'));
   host.send({type:'launch',extension:host.extension,command:'command',launchType:'background',scheduled:true,launchContext:{second:true}});
   await host.wait(m=>m.type==='done');
@@ -314,14 +314,14 @@ test("required preferences persist and are available when the command runs", asy
   const submit = nodes(first.tree).find(node => node.type === "Action.SubmitForm");
   host.send({ type: "event", callback: submit.props.onAction.$callback, args: [{ endpoint: "https://example.test" }] });
   await host.wait(message => message.type === "done");
-  const saved = JSON.parse(await readFile(path.join(host.home, "data/command-space/extension-data/fixture/preferences.json"), "utf8"));
+  const saved = JSON.parse(await readFile(path.join(host.home, "data/super-space/extension-data/fixture/preferences.json"), "utf8"));
   assert.equal(saved.extension.endpoint, "https://example.test");
-  const storage = JSON.parse(await readFile(path.join(host.home, "data/command-space/extension-data/fixture/storage.json"), "utf8"));
+  const storage = JSON.parse(await readFile(path.join(host.home, "data/super-space/extension-data/fixture/storage.json"), "utf8"));
   assert.equal(storage.configured, "https://example.test");
 });
 
 test("two open command preference forms preserve each other's saved settings", async t => {
-  const home = await mkdtemp(path.join(tmpdir(), "command-space-preferences-"));
+  const home = await mkdtemp(path.join(tmpdir(), "super-space-preferences-"));
   const extension = path.join(home, "fixture"), children = [];
   await mkdir(path.join(extension, "src"), {recursive: true});
   t.after(async () => {
@@ -365,7 +365,7 @@ test("two open command preference forms preserve each other's saved settings", a
   await first.wait(message => message.type === "done");
   second.send({type:"event", callback:second.callback, args:[{own:"second-value"}]});
   await second.wait(message => message.type === "done");
-  const directory = path.join(home, "data/command-space/extension-data/fixture");
+  const directory = path.join(home, "data/super-space/extension-data/fixture");
   assert.deepEqual(JSON.parse(await readFile(path.join(directory, "preferences.json"), "utf8")),
     {extension:{}, commands:{first:{own:"first-value"}, second:{own:"second-value"}}});
   assert.deepEqual(JSON.parse(await readFile(path.join(directory, "storage.json"), "utf8")), {first:"first-value", second:"second-value"});
@@ -379,7 +379,7 @@ test("date picker values arrive as Date objects in form submission", async t => 
   const first = await host.wait(message => message.type === "render" && nodes(message.tree).some(node => node.type === "Action.SubmitForm"));
   const action = nodes(first.tree).find(node => node.type === "Action.SubmitForm");
   host.send({ type: "event", callback: action.props.onAction.$callback, args: [{ date: "2026-09-09T12:00:00Z" }] });
-  const file = path.join(host.home, "data/command-space/extension-data/fixture/storage.json");
+  const file = path.join(host.home, "data/super-space/extension-data/fixture/storage.json");
   let saved;
   for (let i = 0; i < 50; i++) { try { saved = JSON.parse(await readFile(file, "utf8")); break; } catch { await new Promise(resolve => setTimeout(resolve, 10)); } }
   assert.equal(saved.date, "2026-09-09T12:00:00.000Z");
@@ -394,7 +394,7 @@ test("cache subscriptions update without exposing cached keys through LocalStora
       await LocalStorage.setItem('cacheEmpty', cache.isEmpty);
     }`);
   await host.wait(message => message.type === "done");
-  const saved = JSON.parse(await readFile(path.join(host.home, "data/command-space/extension-data/fixture/storage.json"), "utf8"));
+  const saved = JSON.parse(await readFile(path.join(host.home, "data/super-space/extension-data/fixture/storage.json"), "utf8"));
   assert.deepEqual(saved, { cacheValue: "updated", cacheEmpty: false });
 });
 
@@ -440,7 +440,7 @@ test("stored form values survive submission but exclude abandoned and rejected e
     export default function Command() { return <Form actions={<ActionPanel><Action.SubmitForm onSubmit={values => values.remembered !== 'invalid'}/></ActionPanel>}><Form.TextField id="remembered" storeValue defaultValue="first"/><Form.TextField id="temporary"/></Form>; }`);
   const first = await host.wait(m => m.type === "render" && nodes(m.tree).some(n => n.props.id === "remembered"));
   const action = nodes(first.tree).find(n => n.type === "Action.SubmitForm");
-  const file = path.join(host.home,"data/command-space/extension-data/fixture/form-values.json");
+  const file = path.join(host.home,"data/super-space/extension-data/fixture/form-values.json");
   await assert.rejects(stat(file), {code:"ENOENT"});
   host.send({type:"event",callback:action.props.onAction.$callback,args:[{remembered:"invalid"}]});
   await new Promise(resolve => setTimeout(resolve, 80));
@@ -459,7 +459,7 @@ test("search dropdowns restore their saved selection across launches", async t =
   const first = await host.wait(m => m.type === "render" && nodes(m.tree).some(n => n.type === "List.Dropdown"));
   const dropdown = nodes(first.tree).find(n => n.type === "List.Dropdown");
   host.send({type:"event",callback:dropdown.props.onChange.$callback,args:["two"]});
-  const file = path.join(host.home,"data/command-space/extension-data/fixture/dropdown-values.json");
+  const file = path.join(host.home,"data/super-space/extension-data/fixture/dropdown-values.json");
   for (let index=0;index<100;index++) { try { await stat(file); break; } catch { await new Promise(resolve=>setTimeout(resolve,10)); } }
   assert.deepEqual(JSON.parse(await readFile(file,"utf8")), {command:{search:"two"}});
   host.send({type:"launch",extension:host.extension,command:"command"});
@@ -480,7 +480,7 @@ test("date focus events restore Date values and non-text refs reach the native f
   host.send({type:"event",callback:action.props.onAction.$callback});
   const focus = await host.wait(m => m.type === "field-command");
   assert.deepEqual(focus,{type:"field-command",operation:"focus",id:"enabled"});
-  const saved = JSON.parse(await readFile(path.join(host.home,"data/command-space/extension-data/fixture/storage.json"),"utf8"));
+  const saved = JSON.parse(await readFile(path.join(host.home,"data/super-space/extension-data/fixture/storage.json"),"utf8"));
   assert.deepEqual(saved,{focus:{type:"focus",id:"date",date:"2026-09-17T12:00:00.000Z"},blur:null});
 });
 
@@ -500,7 +500,7 @@ test("OAuth uses S256 PKCE, checks callback state, and stores expiring tokens pr
   const authorization = await host.wait(m => m.type === "request" && m.kind === "oauth");
   host.send({type:"response",id:authorization.id,value:`raycast://oauth?code=fixture-code&state=${authorization.options.state}`});
   await host.wait(m => m.type === "done");
-  const folder = path.join(host.home,"data/command-space/extension-data/fixture");
+  const folder = path.join(host.home,"data/super-space/extension-data/fixture");
   const saved = JSON.parse(await readFile(path.join(folder,"storage.json"),"utf8"));
   assert.equal(createHash("sha256").update(saved.request.verifier).digest("base64url"), saved.request.challenge);
   assert.equal(new URL(saved.request.url).searchParams.get("prompt"),"consent");
@@ -521,7 +521,7 @@ test("OAuth rejects an unrelated callback instead of accepting its code", async 
   const authorization = await host.wait(m => m.type === "request" && m.kind === "oauth");
   host.send({type:"response",id:authorization.id,value:"raycast://oauth?code=wrong-code&state=unrelated"});
   await host.wait(m => m.type === "done");
-  const saved = JSON.parse(await readFile(path.join(host.home,"data/command-space/extension-data/fixture/storage.json"),"utf8"));
+  const saved = JSON.parse(await readFile(path.join(host.home,"data/super-space/extension-data/fixture/storage.json"),"utf8"));
   assert.match(saved.error,/state did not match/);
 });
 

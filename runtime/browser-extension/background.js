@@ -4,7 +4,7 @@ let nativePort, retryTimer, retries = 0, connected = false;
 function connect() {
   if (nativePort) return;
   clearTimeout(retryTimer);
-  const port = api.runtime.connectNative("com.commandspace.bridge");
+  const port = api.runtime.connectNative("com.superspace.bridge");
   nativePort = port;
   port.onMessage.addListener(async message => {
     if (message.type === "ready") { retries = 0; connected = true; await badge(""); return; }

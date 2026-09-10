@@ -9,10 +9,10 @@ import {promisify} from "node:util";
 
 const run = promisify(execFile);
 const runtime = path.dirname(fileURLToPath(import.meta.url));
-const repository = "Aayush9029/command-space";
+const repository = "Aayush9029/super-space";
 const releaseApi = `https://api.github.com/repos/${repository}/releases/latest`;
-const stateDirectory = () => path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"), "command-space/updates");
-const installDirectory = () => path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local/share"), "command-space");
+const stateDirectory = () => path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"), "super-space/updates");
+const installDirectory = () => path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local/share"), "super-space");
 
 function parts(version) {
   const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(version);
@@ -29,10 +29,10 @@ function trustedUrl(value, api) {
   const url = new URL(value), origin = new URL(api);
   if (url.protocol === "https:" && url.hostname === "github.com" && url.pathname.startsWith(`/${repository}/releases/download/`)) return url.href;
   if (origin.hostname === "127.0.0.1" && origin.protocol === "http:" && url.origin === origin.origin) return url.href;
-  throw new Error("Release asset is outside the Command Space repository");
+  throw new Error("Release asset is outside the Super Space repository");
 }
 async function download(url, maximum) {
-  const response = await fetch(url, {headers:{"User-Agent":"Command-Space-Updater"}, signal:AbortSignal.timeout(120000)});
+  const response = await fetch(url, {headers:{"User-Agent":"Super-Space-Updater"}, signal:AbortSignal.timeout(120000)});
   if (!response.ok || !response.body) throw new Error(`Release download failed (${response.status})`);
   const chunks = []; let size = 0;
   for await (const chunk of response.body) {
@@ -44,20 +44,20 @@ async function download(url, maximum) {
 }
 
 export async function check(current, {api = releaseApi, arch = process.arch} = {}) {
-  const response = await fetch(api, {headers:{"User-Agent":"Command-Space-Updater", Accept:"application/vnd.github+json"}, signal:AbortSignal.timeout(15000)});
+  const response = await fetch(api, {headers:{"User-Agent":"Super-Space-Updater", Accept:"application/vnd.github+json"}, signal:AbortSignal.timeout(15000)});
   if (response.status === 404) return {current, available:false, message:"No published Linux release is available yet"};
   if (!response.ok) throw new Error(`Checking releases failed (${response.status})`);
   const release = await response.json();
   if (release.draft || release.prerelease) return {current, available:false, message:"No stable release is available"};
   const version = release.tag_name.replace(/^v/, "");
-  if (!newer(version, current)) return {current, version, available:false, message:`Command Space ${current} is up to date`};
+  if (!newer(version, current)) return {current, version, available:false, message:`Super Space ${current} is up to date`};
   const architecture = {arm64:"aarch64", x64:"x86_64"}[arch];
   if (!architecture) throw new Error(`No Linux release is available for ${arch}`);
-  const name = `command-space-${version}-linux-${architecture}.tar.gz`;
+  const name = `super-space-${version}-linux-${architecture}.tar.gz`;
   const asset = release.assets?.find(asset => asset.name === name);
   const checksum = release.assets?.find(asset => asset.name === `${name}.sha256`);
   if (!asset || !checksum) throw new Error(`Release ${version} has no verified package for ${architecture}`);
-  return {current, version, available:true, name, architecture, url:`https://github.com/${repository}/releases/tag/v${version}`, notes:release.body || "", asset:trustedUrl(asset.browser_download_url, api), checksum:trustedUrl(checksum.browser_download_url, api), message:`Command Space ${version} is available`};
+  return {current, version, available:true, name, architecture, url:`https://github.com/${repository}/releases/tag/v${version}`, notes:release.body || "", asset:trustedUrl(asset.browser_download_url, api), checksum:trustedUrl(checksum.browser_download_url, api), message:`Super Space ${version} is available`};
 }
 
 export async function prepare(release, directory) {
@@ -68,14 +68,14 @@ export async function prepare(release, directory) {
   const archivePath = path.join(directory, "release.tar.gz");
   await fs.writeFile(archivePath, archive, {mode:0o600, flag:"wx"});
   await run("python3", [path.join(runtime, "unpack-release.py"), archivePath, directory], {timeout:30000});
-  const packagePath = path.join(directory, "command-space");
-  const executable = path.join(packagePath,"bin/command-space");
+  const packagePath = path.join(directory, "super-space");
+  const executable = path.join(packagePath,"bin/super-space");
   const handle = await fs.open(executable,"r");
   const header = Buffer.alloc(20);
   try { await handle.read(header,0,20,0); } finally { await handle.close(); }
   if (header.subarray(0,4).toString("hex") !== "7f454c46" || header[4] !== 2 || header[5] !== 1 || header.readUInt16LE(18) !== ({aarch64:183,x86_64:62}[release.architecture])) throw new Error("Release executable has the wrong architecture");
   const {stdout} = await run(executable,["--version"],{timeout:5000});
-  if (stdout.trim() !== `Command Space ${release.version}`) throw new Error("Release executable version does not match the requested update");
+  if (stdout.trim() !== `Super Space ${release.version}`) throw new Error("Release executable version does not match the requested update");
   for (const required of ["runtime/host.mjs","runtime/bun.lock","scripts/install-linux.sh","scripts/start-daemon.sh"]) await fs.access(path.join(packagePath,required));
   return packagePath;
 }
@@ -100,7 +100,7 @@ export async function acquireUpdateLock(directory) {
       child.once("error",reject);
       child.once("exit",code => {
         if (code === 0) resolve();
-        else reject(new Error(code === 75 ? "Another Command Space update is running" : `Could not lock the update: ${diagnostic.trim() || `flock exited ${code}`}`));
+        else reject(new Error(code === 75 ? "Another Super Space update is running" : `Could not lock the update: ${diagnostic.trim() || `flock exited ${code}`}`));
       });
     });
     const legacy = path.join(directory,"lock");
@@ -108,11 +108,11 @@ export async function acquireUpdateLock(directory) {
     try { owner = JSON.parse(await fs.readFile(path.join(legacy,"owner.json"),"utf8")); }
     catch (error) { if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error; }
     if (Number.isSafeInteger(owner?.pid) && owner.pid > 0) {
-      try { process.kill(owner.pid,0); throw new Error("Another Command Space update is running"); }
+      try { process.kill(owner.pid,0); throw new Error("Another Super Space update is running"); }
       catch (error) { if (error.code !== "ESRCH") throw error; }
     } else {
       const status = await fs.stat(legacy).catch(error => { if (error.code !== "ENOENT") throw error; });
-      if (status && Date.now() - status.mtimeMs < 30000) throw new Error("Another Command Space update is starting; retry in a moment");
+      if (status && Date.now() - status.mtimeMs < 30000) throw new Error("Another Super Space update is starting; retry in a moment");
     }
     return lock;
   } catch (error) {
@@ -163,16 +163,16 @@ export async function install(version, current, options = {}) {
     try {
       await run("bash",[path.join(packagePath,"scripts/install-linux.sh"),"--prebuilt"],{timeout:120000,maxBuffer:4*1024*1024});
     } catch (error) {
-      await run("systemctl",["--user","stop","command-space.service"]).catch(() => {});
+      await run("systemctl",["--user","stop","super-space.service"]).catch(() => {});
       await restoreInstallation(target,previous,snapshot);
-      await run("systemctl",["--user","restart","command-space.service"]);
+      await run("systemctl",["--user","restart","super-space.service"]);
       throw new Error(`Update failed and the previous version was restored: ${error.message}`);
     }
     await writeStatus({state:"complete",version});
-    await run("notify-send",["--app-name=Command Space",`Updated to Command Space ${version}`]).catch(() => {});
+    await run("notify-send",["--app-name=Super Space",`Updated to Super Space ${version}`]).catch(() => {});
   } catch (error) {
     await writeStatus({state:"failed",version,message:error.message});
-    await run("notify-send",["--app-name=Command Space","Command Space update failed",error.message]).catch(() => {});
+    await run("notify-send",["--app-name=Super Space","Super Space update failed",error.message]).catch(() => {});
     throw error;
   } finally {
     try { if (staging) await fs.rm(staging,{recursive:true,force:true}); }

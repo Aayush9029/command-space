@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { webAppArguments, tuiArguments, reminderArguments, selectedPaths, transcodeArguments, brandingArguments, installWallpapers, installTheme, themeName, addShellPlugin, retroCores, retroGameArguments, run } from "../src/workflows.mjs";
 
 async function temporary(t) {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), "command-space-workflow-"));
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), "super-space-workflow-"));
   t.after(() => fs.rm(home, { recursive: true, force: true }));
   return home;
 }
@@ -68,7 +68,7 @@ test("runner passes literal argv and reports failures", async () => {
   const literal = "hello $(touch never); 'quote'\"";
   assert.equal(await run(process.execPath, ["-e", "process.stdout.write(process.argv[1])", literal]), literal);
   await assert.rejects(run(process.execPath, ["-e", "console.error('fixture failure'); process.exit(9)"]), /fixture failure/);
-  await assert.rejects(run("command-space-missing-command-fixture", []), /not installed/);
+  await assert.rejects(run("super-space-missing-command-fixture", []), /not installed/);
 });
 
 test("theme installation protects installed themes and passes complete repository arguments", async t => {

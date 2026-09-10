@@ -3,7 +3,7 @@ import path from "node:path";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { spawn } from "node:child_process";
 
-const bridge = () => globalThis.__commandSpace;
+const bridge = () => globalThis.__superSpace;
 export function keyring(args, input) {
   return new Promise((resolve, reject) => {
     const child = spawn("secret-tool", args, {stdio:[input === undefined ? "ignore" : "pipe", "pipe", "pipe"]});
@@ -15,6 +15,27 @@ export function keyring(args, input) {
     if (input !== undefined) child.stdin.end(input);
   });
 }
+const legacyApplication = "command-space";
+const applicationAttributes = (application, attributes) => ["application", application, ...attributes];
+
+export async function lookupCredential(attributes, label, access = keyring) {
+  const current = applicationAttributes("super-space", attributes);
+  const value = await access(["lookup", ...current]);
+  if (value) return value;
+  const legacy = applicationAttributes(legacyApplication, attributes);
+  const previous = await access(["lookup", ...legacy]);
+  if (!previous) return undefined;
+  await access(["store", `--label=${label}`, ...current], previous);
+  await access(["clear", ...legacy]);
+  return previous;
+}
+
+export async function clearCredential(attributes, access = keyring) {
+  for (const application of [legacyApplication, "super-space"]) {
+    await access(["clear", ...applicationAttributes(application, attributes)]);
+  }
+}
+
 export const RedirectMethod = { Web:"web", App:"app", AppURI:"appURI", ClientIdMetadataDocument:"clientIdMetadataDocument" };
 export const clientIdMetadataDocument = "https://www.raycast.com/.well-known/oauth-client-metadata/raycast.json";
 
@@ -59,14 +80,15 @@ export class PKCEClient {
     const provider = createHash("sha256").update(this.options.providerId || this.options.providerName || "default").digest("hex");
     return path.join(bridge().environment.supportPath, "oauth", `${provider}.json`);
   }
-  attributes() { return ["application","command-space","extension",bridge().environment.extensionName,"provider",this.options.providerId || this.options.providerName || "default"]; }
+  attributes() { return ["extension",bridge().environment.extensionName,"provider",this.options.providerId || this.options.providerName || "default"]; }
   async setTokens(options) {
     const accessToken = options.accessToken ?? options.access_token;
     if (!accessToken) throw new Error("An access token is required");
     const tokens = { accessToken, refreshToken:options.refreshToken ?? options.refresh_token, idToken:options.idToken ?? options.id_token,
       expiresIn:options.expiresIn ?? options.expires_in, scope:options.scope, tokenType:options.tokenType ?? options.token_type, updatedAt:new Date().toISOString() };
-    if (process.env.COMMAND_SPACE_TOKEN_STORAGE !== "file") {
-      await keyring(["store", `--label=Command Space · ${this.options.providerName}`, ...this.attributes()], JSON.stringify(tokens));
+    if (process.env.SUPER_SPACE_TOKEN_STORAGE !== "file") {
+      await keyring(["store", `--label=Super Space · ${this.options.providerName}`, "application", "super-space", ...this.attributes()], JSON.stringify(tokens));
+      await keyring(["clear", "application", legacyApplication, ...this.attributes()]);
       return;
     }
     const file = this.file();
@@ -77,8 +99,8 @@ export class PKCEClient {
   }
   async getTokens() {
     let tokens;
-    if (process.env.COMMAND_SPACE_TOKEN_STORAGE !== "file") {
-      const value = await keyring(["lookup", ...this.attributes()]);
+    if (process.env.SUPER_SPACE_TOKEN_STORAGE !== "file") {
+      const value = await lookupCredential(this.attributes(), `Super Space · ${this.options.providerName}`);
       if (!value) return undefined;
       tokens = JSON.parse(value);
     } else {
@@ -89,7 +111,7 @@ export class PKCEClient {
     return tokens;
   }
   async removeTokens() {
-    if (process.env.COMMAND_SPACE_TOKEN_STORAGE !== "file") await keyring(["clear", ...this.attributes()]);
+    if (process.env.SUPER_SPACE_TOKEN_STORAGE !== "file") await clearCredential(this.attributes());
     else await fs.rm(this.file(), {force:true});
   }
 }

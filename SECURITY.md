@@ -1,10 +1,10 @@
 # Security
 
-Report vulnerabilities through [GitHub's private reporting form](https://github.com/Aayush9029/command-space/security/advisories/new). Use public issues for ordinary bugs that do not expose users or their data.
+Report vulnerabilities through [GitHub's private reporting form](https://github.com/Aayush9029/super-space/security/advisories/new). Use public issues for ordinary bugs that do not expose users or their data.
 
 ## What to include
 
-Describe the affected feature, the impact, and the steps needed to reproduce it. Include your Command Space version or commit, Omarchy version, CPU architecture, and any relevant extension versions. A small reproduction or patch helps.
+Describe the affected feature, the impact, and the steps needed to reproduce it. Include your Super Space version or commit, Omarchy version, CPU architecture, and any relevant extension versions. A small reproduction or patch helps.
 
 Remove passwords, tokens, private keys, clipboard contents, and personal file paths from logs and screenshots. If a reproduction needs a secret, use a disposable value. Share exploit details privately while a fix is being prepared.
 

@@ -4,10 +4,10 @@ struct LauncherTray;
 
 impl ksni::Tray for LauncherTray {
     fn id(&self) -> String {
-        "command-space".into()
+        "super-space".into()
     }
     fn title(&self) -> String {
-        "Command Space".into()
+        "Super Space".into()
     }
     fn icon_name(&self) -> String {
         String::new()
@@ -20,7 +20,7 @@ impl ksni::Tray for LauncherTray {
     }
     fn menu(&self) -> Vec<MenuItem<Self>> {
         [
-            ("Open Command Space", "show", "root"),
+            ("Open Super Space", "show", "root"),
             ("Clipboard History", "show", "builtin:clipboard"),
             ("Extensions", "show", "builtin:extensions"),
             ("Settings", "show", "builtin:settings"),

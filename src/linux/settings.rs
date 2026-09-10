@@ -556,7 +556,7 @@ impl Editor {
                 body = body
                     .push(
                         row![
-                            text("Command Space").size(24),
+                            text("Super Space").size(24),
                             text(env!("CARGO_PKG_VERSION")).size(13).color(colors.muted)
                         ]
                         .spacing(12)
@@ -579,7 +579,7 @@ impl Editor {
                     )))
                     .push(section("Project", colors))
                     .push(button("Source code ↗", colors).on_press(Message::Url(
-                        "https://github.com/Aayush9029/command-space".into(),
+                        "https://github.com/Aayush9029/super-space".into(),
                     )))
                     .push(button("Open configuration", colors).on_press(Message::Run(
                         super::model::Action::Builtin("edit-config".into()),

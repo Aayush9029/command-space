@@ -6,13 +6,13 @@ import path from "node:path";
 import {execFileSync} from "node:child_process";
 import {getApplications,getDefaultApplication} from "../applications.mjs";
 
-test("application associations honor the target file and URL type", {skip:!process.env.COMMAND_SPACE_DESKTOP_API_TEST}, async t => {
-  globalThis.__commandSpace = {launcherPath:process.env.COMMAND_SPACE_BINARY || "command-space"};
+test("application associations honor the target file and URL type", {skip:!process.env.SUPER_SPACE_DESKTOP_API_TEST}, async t => {
+  globalThis.__superSpace = {launcherPath:process.env.SUPER_SPACE_BINARY || "super-space"};
   const apps = await getApplications(); assert.ok(apps.length > 0);
   const browser = await getDefaultApplication("https://example.org");
   const expected = execFileSync("xdg-mime",["query","default","x-scheme-handler/https"],{encoding:"utf8"}).trim();
   assert.equal(path.basename(browser.path),expected);
-  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"command-space-apps-"));
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"super-space-apps-"));
   t.after(()=>fs.rm(folder,{recursive:true,force:true}));
   const file = path.join(folder,"fixture.txt"); await fs.writeFile(file,"plain text");
   const editor = await getDefaultApplication(file);

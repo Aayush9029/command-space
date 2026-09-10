@@ -14,7 +14,7 @@ export default function Command() {
     <Action title="Focus Enabled" shortcut={{modifiers:["ctrl"],key:"e"}} onAction={() => enabled.current?.focus()}/>
     <ActionPanel.Submenu title="More Actions"><Action title="Write Action Result" onAction={async () => {await LocalStorage.setItem("actionPanel",true); await showToast({title:"Nested action verified"});}}/></ActionPanel.Submenu>
   </ActionPanel>}>
-    <Form.TextField id="name" title="Name" defaultValue="Command Space" storeValue autoFocus onFocus={record} onBlur={record}/>
+    <Form.TextField id="name" title="Name" defaultValue="Super Space" storeValue autoFocus onFocus={record} onBlur={record}/>
     <Form.DatePicker id="date" title="Date" defaultValue={new Date("2026-09-09T12:00:00Z")} onFocus={record} onBlur={record}/>
     <Form.Checkbox id="enabled" ref={enabled} label="Enabled" defaultValue onFocus={record} onBlur={record}/>
     <Form.Dropdown id="choice" title="Choice" defaultValue="one" onFocus={record} onBlur={record}>

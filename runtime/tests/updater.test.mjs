@@ -22,26 +22,26 @@ test("release checks compare versions numerically and select a verified native a
   const release = {tag_name:"v0.2.0",body:"A Linux update",assets:[]};
   const server = createServer((request,response) => {
     if (request.url === "/release") {response.writeHead(status,{"Content-Type":"application/json"}); response.end(JSON.stringify(release));}
-    else response.end(request.url.endsWith("sha256") ? `${"0".repeat(64)}  command-space-0.2.0-linux-aarch64.tar.gz\n` : "broken download");
+    else response.end(request.url.endsWith("sha256") ? `${"0".repeat(64)}  super-space-0.2.0-linux-aarch64.tar.gz\n` : "broken download");
   });
   await new Promise(resolve => server.listen(0,"127.0.0.1",resolve));
   t.after(() => server.close());
   const origin = `http://127.0.0.1:${server.address().port}`;
   const api = `${origin}/release`;
-  const name = "command-space-0.2.0-linux-aarch64.tar.gz";
+  const name = "super-space-0.2.0-linux-aarch64.tar.gz";
   release.assets = [name,`${name}.sha256`].map(name => ({name,browser_download_url:`${origin}/${name}`}));
   const result = await check("0.1.0",{api,arch:"arm64"});
   assert.equal(result.available,true); assert.equal(result.architecture,"aarch64");
   assert.equal((await check("0.2.0",{api,arch:"arm64"})).available,false);
   await assert.rejects(check("0.1.0",{api,arch:"x64"}),/no verified package/);
-  const x64 = "command-space-0.2.0-linux-x86_64.tar.gz";
+  const x64 = "super-space-0.2.0-linux-x86_64.tar.gz";
   release.assets.push(...[x64,`${x64}.sha256`].map(name => ({name,browser_download_url:`${origin}/${name}`})));
   assert.equal((await check("0.1.0",{api,arch:"x64"})).architecture,"x86_64");
   const directory = await mkdtemp(path.join(tmpdir(),"cs-update-"));
   t.after(() => rm(directory,{recursive:true,force:true}));
   await assert.rejects(prepare(result,directory),/checksum did not match/);
   release.assets[0].browser_download_url = "https://example.com/untrusted.tar.gz";
-  await assert.rejects(check("0.1.0",{api,arch:"arm64"}),/outside the Command Space repository/);
+  await assert.rejects(check("0.1.0",{api,arch:"arm64"}),/outside the Super Space repository/);
   status = 404;
   assert.match((await check("0.1.0",{api})).message,/No published Linux release/);
 });
@@ -51,7 +51,7 @@ test("update lock excludes contenders and is released when its owner crashes", {
   t.after(() => rm(directory,{recursive:true,force:true}));
   const held = await acquireUpdateLock(directory);
   try {
-    await Promise.all(Array.from({length:8}, () => assert.rejects(acquireUpdateLock(directory),/Another Command Space update is running/)));
+    await Promise.all(Array.from({length:8}, () => assert.rejects(acquireUpdateLock(directory),/Another Super Space update is running/)));
   } finally { await held.close(); }
   await (await acquireUpdateLock(directory)).close();
   const updater = new URL("../updater.mjs",import.meta.url).href;
@@ -59,7 +59,7 @@ test("update lock excludes contenders and is released when its owner crashes", {
   t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
   const exited = once(child,"exit");
   await Promise.race([once(child.stdout,"data"),exited.then(() => {throw new Error("Lock owner exited before acquiring the lock");})]);
-  await assert.rejects(acquireUpdateLock(directory),/Another Command Space update is running/);
+  await assert.rejects(acquireUpdateLock(directory),/Another Super Space update is running/);
   child.kill("SIGKILL");
   await exited;
   await (await acquireUpdateLock(directory)).close();
@@ -78,7 +78,7 @@ test("updater recovers abandoned legacy locks without overlapping a live legacy 
   await utimes(legacy,abandoned,abandoned);
   await (await acquireUpdateLock(directory)).close();
   await writeFile(path.join(legacy,"owner.json"),JSON.stringify({pid:process.pid}));
-  await assert.rejects(acquireUpdateLock(directory),/Another Command Space update is running/);
+  await assert.rejects(acquireUpdateLock(directory),/Another Super Space update is running/);
   await rm(legacy,{recursive:true});
   await (await acquireUpdateLock(directory)).close();
 });
@@ -91,13 +91,13 @@ test("failed updates restore bundled extensions while preserving user extensions
     await mkdir(path.join(release,"extensions",name),{recursive:true});
     await writeFile(path.join(release,"extensions",name,"package.json"),JSON.stringify({name}));
   }
-  const original = {"bin/command-space":"working binary","runtime/host.mjs":"working host","extensions/developer-tools/source.ts":"original command","extensions/user-extension/source.ts":"user code","extension-data/developer-tools/storage.json":"user data"};
+  const original = {"bin/super-space":"working binary","runtime/host.mjs":"working host","extensions/developer-tools/source.ts":"original command","extensions/user-extension/source.ts":"user code","extension-data/developer-tools/storage.json":"user data"};
   for (const [file,content] of Object.entries(original)) {
     await mkdir(path.dirname(path.join(target,file)),{recursive:true});
     await writeFile(path.join(target,file),content);
   }
   const snapshot = await backupInstallation(target,previous,release);
-  for (const file of ["bin/command-space","runtime/host.mjs","extensions/developer-tools/source.ts","extensions/omarchy-tools/source.ts","bundled-extensions/omarchy-tools/source.ts"]) {
+  for (const file of ["bin/super-space","runtime/host.mjs","extensions/developer-tools/source.ts","extensions/omarchy-tools/source.ts","bundled-extensions/omarchy-tools/source.ts"]) {
     await mkdir(path.dirname(path.join(target,file)),{recursive:true});
     await writeFile(path.join(target,file),"broken update");
   }
@@ -113,11 +113,11 @@ test("release extraction rejects traversal and links and extracts ordinary packa
   const generator = path.join(directory,"generate.py"), archive = path.join(directory,"release.tar.gz");
   await writeFile(generator, `import io,sys,tarfile\nwith tarfile.open(sys.argv[1],"w:gz",format=tarfile.USTAR_FORMAT) as archive:\n member=tarfile.TarInfo(sys.argv[2])\n if len(sys.argv)>3: member.type=tarfile.SYMTYPE; member.linkname="/tmp/escape"\n else: member.size=7\n archive.addfile(member,io.BytesIO(b"fixture"))\n`);
   const output = path.join(directory,"output"); await mkdir(output);
-  for (const [name,link] of [["command-space/../../escape",false],["/tmp/escape",false],["command-space/linked",true]]) {
+  for (const [name,link] of [["super-space/../../escape",false],["/tmp/escape",false],["super-space/linked",true]]) {
     await run("python3",[generator,archive,name,...(link?["link"]:[])]);
     await assert.rejects(run("python3",[unpack,archive,output]),/invalid path|link or special file/);
   }
-  await run("python3",[generator,archive,"command-space/README.md"]);
+  await run("python3",[generator,archive,"super-space/README.md"]);
   await run("python3",[unpack,archive,output]);
-  assert.equal(await readFile(path.join(output,"command-space/README.md"),"utf8"),"fixture");
+  assert.equal(await readFile(path.join(output,"super-space/README.md"),"utf8"),"fixture");
 });

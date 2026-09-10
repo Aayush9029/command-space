@@ -2,7 +2,7 @@
 set -euo pipefail
 
 fail() {
-  printf 'Command Space: %s\n' "$*" >&2
+  printf 'Super Space: %s\n' "$*" >&2
   exit 1
 }
 
@@ -48,9 +48,9 @@ main() {
   export PATH="$HOME/.bun/bin:${PATH:-/usr/local/bin:/usr/bin:/bin}"
   umask 077
   staging=$(mktemp -d)
-  command_space_staging=$staging
-  command_space_bun_staging=
-  trap 'rm -rf -- "$command_space_staging"; [[ -z "$command_space_bun_staging" ]] || rm -f -- "$command_space_bun_staging"' EXIT
+  super_space_staging=$staging
+  super_space_bun_staging=
+  trap 'rm -rf -- "$super_space_staging"; [[ -z "$super_space_bun_staging" ]] || rm -f -- "$super_space_bun_staging"' EXIT
   cat > "$staging/verify.py" <<'PY'
 import hashlib
 import json
@@ -81,15 +81,15 @@ def release_plan(metadata, arch):
     with open(metadata, encoding="utf-8") as source:
         release = json.load(source)
     tag = release.get("tag_name", "")
-    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag) or tuple(map(int, tag[1:].split("."))) < (1, 0, 2):
-        raise ValueError("A Bun-compatible Command Space release (1.0.2 or newer) is not available yet")
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag) or tuple(map(int, tag[1:].split("."))) < (1, 0, 3):
+        raise ValueError("A Bun-compatible Super Space release (1.0.3 or newer) is not available yet")
     if release.get("draft") or release.get("prerelease"):
         raise ValueError("Expected a stable published release")
-    name = f"command-space-{tag[1:]}-linux-{arch}.tar.gz"
+    name = f"super-space-{tag[1:]}-linux-{arch}.tar.gz"
     urls = []
     for asset_name in (name, name + ".sha256"):
         matches = [asset for asset in release.get("assets", []) if asset.get("name") == asset_name]
-        expected = f"https://github.com/Aayush9029/command-space/releases/download/{tag}/{asset_name}"
+        expected = f"https://github.com/Aayush9029/super-space/releases/download/{tag}/{asset_name}"
         if len(matches) != 1 or matches[0].get("browser_download_url") != expected:
             raise ValueError(f"Missing or invalid release asset: {asset_name}")
         urls.append(expected)
@@ -107,7 +107,7 @@ def unpack_package(archive, checksum, name, destination, arch):
     with tarfile.open(archive, "r:gz") as bundle:
         members, paths, total = [], set(), 0
         for member in bundle:
-            path = safe_path(member.name, "command-space")
+            path = safe_path(member.name, "super-space")
             if path in paths or not (member.isfile() or member.isdir()):
                 raise ValueError("Archive contains duplicate paths, links, or special files")
             paths.add(path)
@@ -116,11 +116,11 @@ def unpack_package(archive, checksum, name, destination, arch):
                 raise ValueError("Archive exceeds extraction limits")
             member.mode = 0o755 if member.isdir() or member.mode & 0o111 else 0o644
             members.append(member)
-        required = ("scripts/install-linux.sh", "bin/command-space", "runtime/bun.lock", "runtime/host.mjs")
+        required = ("scripts/install-linux.sh", "bin/super-space", "runtime/bun.lock", "runtime/host.mjs")
         for relative in required:
-            if not any(member.name.rstrip("/") == f"command-space/{relative}" and member.isfile() for member in members):
+            if not any(member.name.rstrip("/") == f"super-space/{relative}" and member.isfile() for member in members):
                 raise ValueError(f"Package is incomplete: missing {relative}")
-        executable = next(member for member in members if member.name == "command-space/bin/command-space")
+        executable = next(member for member in members if member.name == "super-space/bin/super-space")
         with bundle.extractfile(executable) as source:
             header = source.read(20)
         machine = {"x86_64": 62, "aarch64": 183}[arch]
@@ -153,13 +153,13 @@ def unpack_bun(archive, digest, root, destination):
 try:
     {"release": release_plan, "package": unpack_package, "bun": unpack_bun}[sys.argv[1]](*sys.argv[2:])
 except (ValueError, OSError, KeyError, tarfile.TarError, zipfile.BadZipFile) as error:
-    sys.exit(f"Command Space: {error}")
+    sys.exit(f"Super Space: {error}")
 PY
-  printf 'Finding the latest Command Space release...\n'
-  download 'https://api.github.com/repos/Aayush9029/command-space/releases/latest' "$staging/release.json" 1048576
+  printf 'Finding the latest Super Space release...\n'
+  download 'https://api.github.com/repos/Aayush9029/super-space/releases/latest' "$staging/release.json" 1048576
   python3 "$staging/verify.py" release "$staging/release.json" "$arch" > "$staging/release-plan"
   { read -r version; read -r archive; read -r package_url; read -r checksum_url; } < "$staging/release-plan"
-  printf 'Downloading Command Space %s...\n' "$version"
+  printf 'Downloading Super Space %s...\n' "$version"
   download "$package_url" "$staging/$archive" 134217728
   download "$checksum_url" "$staging/checksum" 4096
   python3 "$staging/verify.py" package "$staging/$archive" "$staging/checksum" "$archive" "$staging/unpacked" "$arch"
@@ -187,16 +187,16 @@ PY
     printf 'Installing required packages: %s\n' "${packages[*]}"
     sudo pacman -S --needed --noconfirm "${packages[@]}" < /dev/tty
   fi
-  [[ $("$staging/unpacked/command-space/bin/command-space" --version) == "Command Space $version" ]] || fail 'The package executable does not match the release version or cannot run on this system.'
+  [[ $("$staging/unpacked/super-space/bin/super-space" --version) == "Super Space $version" ]] || fail 'The package executable does not match the release version or cannot run on this system.'
   if [[ "$need_bun" == true ]]; then
     mkdir -p "$HOME/.bun/bin"
-    command_space_bun_staging=$(mktemp "$HOME/.bun/bin/.command-space-bun.XXXXXX")
-    install -m 755 "$staging/bun" "$command_space_bun_staging"
-    mv -f "$command_space_bun_staging" "$HOME/.bun/bin/bun"
-    command_space_bun_staging=
+    super_space_bun_staging=$(mktemp "$HOME/.bun/bin/.super-space-bun.XXXXXX")
+    install -m 755 "$staging/bun" "$super_space_bun_staging"
+    mv -f "$super_space_bun_staging" "$HOME/.bun/bin/bun"
+    super_space_bun_staging=
   fi
-  printf 'Installing Command Space...\n'
-  bash "$staging/unpacked/command-space/scripts/install-linux.sh" --prebuilt
+  printf 'Installing Super Space...\n'
+  bash "$staging/unpacked/super-space/scripts/install-linux.sh" --prebuilt
 }
 
 main "$@"

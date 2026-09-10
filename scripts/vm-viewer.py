@@ -115,7 +115,7 @@ FRAME_QUEUE = '''function createFrameQueue({send,capture,display,discard=()=>{},
 '''
 
 
-PAGE = '''<!doctype html><html><meta charset="utf-8"><title>Command Space — live Omarchy VM</title>
+PAGE = '''<!doctype html><html><meta charset="utf-8"><title>Super Space — live Omarchy VM</title>
 <style>body{margin:0;background:#101116;color:#b4bee6;font:13px monospace}header{display:flex;gap:14px;align-items:center;padding:10px 14px}button,input{background:#24283b;color:#c0caf5;border:1px solid #414868;padding:7px;font:inherit}input{flex:1}canvas{display:block;width:100%;outline:0;user-select:none}small{color:#7aa2f7}</style>
 <header><strong>Live Omarchy VM</strong><input id="typing" aria-label="Type into VM" placeholder="Type into the focused guest field"><button id="send">Type</button><button data-key="ret">Enter</button><button data-key="esc">Escape</button><button data-key="up">↑</button><button data-key="down">↓</button><small id="status">Connecting</small></header>
 <header><button data-chord="meta_l,spc">Super+Space</button><button data-chord="meta_l,ctrl,v">Clipboard</button><button data-chord="meta_l,ctrl,e">Emoji</button><button data-chord="ctrl,k">Actions</button><button data-chord="ctrl,a">Select All</button><button data-key="tab">Tab</button><button data-chord="shift,tab">Shift+Tab</button><button data-key="spc">Space</button><button data-chord="ctrl,e">Ctrl+E</button><button data-key="pgdn">Page Down</button><button data-key="pgup">Page Up</button><button id="refresh">Refresh view</button></header>

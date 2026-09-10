@@ -7,7 +7,7 @@ import statistics
 import subprocess
 import time
 
-command_socket = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "command-space.sock"
+command_socket = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "super-space.sock"
 
 
 def send(command):
@@ -18,7 +18,7 @@ def send(command):
 
 def mapped():
     windows = json.loads(subprocess.check_output(["hyprctl", "-j", "clients"]))
-    return any(window.get("class") == "command-space" and window.get("mapped") for window in windows)
+    return any(window.get("class") == "super-space" and window.get("mapped") for window in windows)
 
 
 def wait_for(expected):
@@ -36,7 +36,7 @@ def percentile(values, fraction):
 send("hide")
 wait_for(False)
 started = time.perf_counter()
-subprocess.run(["systemctl", "--user", "restart", "command-space.service"], check=True)
+subprocess.run(["systemctl", "--user", "restart", "super-space.service"], check=True)
 deadline = time.monotonic() + 10
 while True:
     try:
@@ -60,7 +60,7 @@ for _ in range(20):
     warm.append((time.perf_counter()-started)*1000)
 send("hide")
 wait_for(False)
-group = subprocess.check_output(["systemctl", "--user", "show", "command-space.service", "-p", "ControlGroup", "--value"], text=True).strip()
+group = subprocess.check_output(["systemctl", "--user", "show", "super-space.service", "-p", "ControlGroup", "--value"], text=True).strip()
 cgroup = Path("/sys/fs/cgroup") / group.lstrip("/")
 
 

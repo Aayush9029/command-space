@@ -1,6 +1,6 @@
 # Contributing
 
-Command Space is built for Omarchy. Useful contributions include launcher fixes, faster search, better keyboard navigation, and Linux support for extension APIs.
+Super Space is built for Omarchy. Useful contributions include launcher fixes, faster search, better keyboard navigation, and Linux support for extension APIs.
 
 For a small fix, open a pull request. For a large feature or architectural change, start an issue describing the problem and proposed behavior so we can discuss the scope first. Report vulnerabilities through [Security](SECURITY.md).
 

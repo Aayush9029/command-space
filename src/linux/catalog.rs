@@ -560,7 +560,7 @@ fn quick_results(query: &str, config: &Config) -> Vec<Entry> {
             .find(|s| s.alias.as_ref() == Some(name) || &s.name == name)
     {
         let command = format!(
-            "bash -lc {} command-space {}",
+            "bash -lc {} super-space {}",
             super::model::shell_quote(&shell.command),
             arguments[1..]
                 .iter()
@@ -579,14 +579,14 @@ fn quick_results(query: &str, config: &Config) -> Vec<Entry> {
     match query {
         "refresh" => entries.push(Entry::new(
             "refresh",
-            "Reload Command Space",
+            "Reload Super Space",
             "Refresh configuration, menu, apps, and extensions",
             "",
             Action::Builtin("refresh".into()),
         )),
         "version" => entries.push(Entry::new(
             "version",
-            &format!("Command Space {}", env!("CARGO_PKG_VERSION")),
+            &format!("Super Space {}", env!("CARGO_PKG_VERSION")),
             "Version",
             "󰋽",
             Action::Copy(env!("CARGO_PKG_VERSION").into()),
@@ -598,9 +598,9 @@ fn quick_results(query: &str, config: &Config) -> Vec<Entry> {
             "󰅖",
             Action::Builtin("quit-all".into()),
         )),
-        "quit command space" => entries.push(Entry::new(
+        "quit super space" => entries.push(Entry::new(
             "quit-launcher",
-            "Quit Command Space",
+            "Quit Super Space",
             "Stop the launcher",
             "󰅖",
             Action::Builtin("quit".into()),

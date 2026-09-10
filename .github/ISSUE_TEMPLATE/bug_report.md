@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a problem with Command Space
+about: Report a problem with Super Space
 title: ""
 labels: bug
 ---
@@ -13,4 +13,4 @@ Describe the problem and what you expected.
 
 ## Environment
 
-Command Space version, Omarchy version, and CPU architecture. Include logs or a screenshot if useful.
+Super Space version, Omarchy version, and CPU architecture. Include logs or a screenshot if useful.

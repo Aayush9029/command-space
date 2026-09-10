@@ -240,7 +240,7 @@ pub fn builtin(name: &str) -> Option<String> {
     });
     let asset = catalog.get(name.strip_prefix("icon:").unwrap_or(name))?;
     let roots = [
-        std::env::var_os("COMMAND_SPACE_RUNTIME").map(PathBuf::from),
+        std::env::var_os("SUPER_SPACE_RUNTIME").map(PathBuf::from),
         Some(super::model::data_dir().join("runtime")),
         Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("runtime")),
     ];

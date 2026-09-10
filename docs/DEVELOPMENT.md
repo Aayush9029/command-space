@@ -4,7 +4,7 @@ Build on Omarchy with Rust, Bun 1.4.2+, Python 3.12+, and the system dependencie
 
 ```sh
 bun install --cwd runtime --frozen-lockfile --ignore-scripts
-cargo build --locked --bin command-space
+cargo build --locked --bin super-space
 cargo fmt --all --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked --all-targets
@@ -12,11 +12,13 @@ bun run --cwd runtime test
 bun test --timeout 60000 extensions/omarchy-tools/tests
 ```
 
-From a Mac, prefix each command with `scripts/dev.sh` to sync and run it over SSH. Set `COMMAND_SPACE_VM` to your SSH host; it defaults to `omarchy`. Builds stay on the guest's native filesystem.
+From a Mac, prefix each command with `scripts/dev.sh` to sync and run it over SSH. Set `SUPER_SPACE_VM` to your SSH host; it defaults to `omarchy`. Builds stay on the guest's native filesystem.
 
 ## Install
 
 For a prebuilt install on Omarchy, use the one-liner in the [README](../README.md). It verifies the release download, installs missing dependencies, and configures the launcher. Run it as your desktop user with the standard Omarchy XDG directories. Missing system packages may require sudo; Bun is installed in `~/.bun/bin`. Dependency installs remain if application setup fails, while launcher files and integration are restored.
+
+Existing Command Space installations migrate when you run the one-liner. Settings, history, and extensions move to the new directories. If both names already contain data, installation stops so neither is overwritten.
 
 To build and install from this checkout:
 
@@ -26,7 +28,7 @@ bash scripts/install-linux.sh
 
 The installer builds a release binary, replaces Omarchy's launcher bindings, and restarts the user service. Use `--debug` for development or `--prebuilt` from an extracted release archive.
 
-`command-space integration uninstall` removes desktop integration and retains settings and extension data. Hyprland backups live in `~/.local/state/command-space/backups`.
+`super-space integration uninstall` removes desktop integration and retains settings and extension data. Hyprland backups live in `~/.local/state/super-space/backups`.
 
 ## Package
 

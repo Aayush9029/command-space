@@ -14,9 +14,9 @@ test("AI streams split SSE frames, maps models, and forwards cancellation", asyn
     setTimeout(() => res.end('world"}}]}\r\n\r\ndata: {"choices":[{"delta":{"content":"!"}}]}\n\ndata: [DONE]\n\n'), 10);
   });
   await new Promise(resolve => server.listen(0,"127.0.0.1",resolve));
-  t.after(() => { server.closeAllConnections(); server.close(); delete globalThis.__commandSpace; delete process.env.COMMAND_SPACE_AI_API_KEY; });
-  globalThis.__commandSpace = {ai:{endpoint:`http://127.0.0.1:${server.address().port}/v1`,model:"local-model",models:{preferred:"mapped-model"}}};
-  process.env.COMMAND_SPACE_AI_API_KEY = "synthetic-test-key";
+  t.after(() => { server.closeAllConnections(); server.close(); delete globalThis.__superSpace; delete process.env.SUPER_SPACE_AI_API_KEY; });
+  globalThis.__superSpace = {ai:{endpoint:`http://127.0.0.1:${server.address().port}/v1`,model:"local-model",models:{preferred:"mapped-model"}}};
+  process.env.SUPER_SPACE_AI_API_KEY = "synthetic-test-key";
   assert.ok(aiAvailable());
   const chunks = [];
   const answer = AI.ask("hello",{model:"preferred",creativity:3}).on("data",chunk => chunks.push(chunk));

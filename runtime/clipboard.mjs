@@ -5,7 +5,7 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 
 const execute = promisify(execFile);
-const bridge = () => globalThis.__commandSpace;
+const bridge = () => globalThis.__superSpace;
 const run = async (program, args) => (await execute(program,args,{encoding:"utf8",timeout:5000,maxBuffer:16*1024*1024})).stdout;
 
 async function readMime(type) {

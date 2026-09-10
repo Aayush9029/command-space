@@ -491,7 +491,7 @@ impl Launcher {
             level: window::Level::AlwaysOnTop,
             exit_on_close_request: false,
             platform_specific: window::settings::PlatformSpecific {
-                application_id: "command-space".into(),
+                application_id: "super-space".into(),
                 ..Default::default()
             },
             ..Default::default()
@@ -672,7 +672,7 @@ impl Launcher {
             Message::UpdateStarted(result) => {
                 self.status = match result {
                     Ok(()) => {
-                        "Downloading update. Command Space will restart when it is ready.".into()
+                        "Downloading update. Super Space will restart when it is ready.".into()
                     }
                     Err(error) => error,
                 };
@@ -718,7 +718,7 @@ impl Launcher {
                         async move {
                             tokio::time::sleep(std::time::Duration::from_millis(80)).await;
                             tokio::task::spawn_blocking(move || {
-                                windows::place("class:^command-space$", rect)
+                                windows::place("class:^super-space$", rect)
                                     .and_then(|_| windows::raise_launcher())
                             })
                             .await
@@ -997,7 +997,7 @@ impl Launcher {
                     std::thread::spawn(move || {
                         let _ = Command::new("notify-send")
                             .args([
-                                "--app-name=Command Space",
+                                "--app-name=Super Space",
                                 "Command could not finish",
                                 &message,
                             ])
@@ -1117,11 +1117,9 @@ impl Launcher {
                 return Task::perform(
                     async move {
                         let mut command = tokio::process::Command::new("secret-tool");
-                        if remove {
-                            command.arg("clear");
-                        } else {
+                        if !remove {
                             let input = tokio::process::Command::new("zenity")
-                                .args(["--password", "--title", "Command Space AI API key"])
+                                .args(["--password", "--title", "Super Space AI API key"])
                                 .output()
                                 .await
                                 .map_err(|e| e.to_string())?;
@@ -1130,10 +1128,10 @@ impl Launcher {
                             }
                             let key = String::from_utf8(input.stdout).map_err(|e| e.to_string())?;
                             command
-                                .args(["store", "--label=Command Space AI provider"])
+                                .args(["store", "--label=Super Space AI provider"])
                                 .args([
                                     "application",
-                                    "command-space",
+                                    "super-space",
                                     "service",
                                     "ai",
                                     "endpoint",
@@ -1152,29 +1150,36 @@ impl Launcher {
                             }
                             let output =
                                 child.wait_with_output().await.map_err(|e| e.to_string())?;
-                            return if output.status.success() {
-                                Ok(())
-                            } else {
-                                Err("Could not save the API key in the desktop keyring".into())
-                            };
+                            if !output.status.success() {
+                                return Err(
+                                    "Could not save the API key in the desktop keyring".into()
+                                );
+                            }
                         }
-                        let status = command
-                            .args([
-                                "application",
-                                "command-space",
-                                "service",
-                                "ai",
-                                "endpoint",
-                                &endpoint,
-                            ])
-                            .status()
-                            .await
-                            .map_err(|e| e.to_string())?;
-                        if status.success() || status.code() == Some(1) {
-                            Ok(())
+                        let applications = if remove {
+                            &["command-space", "super-space"][..]
                         } else {
-                            Err("Could not remove the API key".into())
+                            &["command-space"][..]
+                        };
+                        for application in applications {
+                            let status = tokio::process::Command::new("secret-tool")
+                                .args([
+                                    "clear",
+                                    "application",
+                                    application,
+                                    "service",
+                                    "ai",
+                                    "endpoint",
+                                    &endpoint,
+                                ])
+                                .status()
+                                .await
+                                .map_err(|e| e.to_string())?;
+                            if !status.success() && status.code() != Some(1) {
+                                return Err("Could not remove the API key".into());
+                            }
                         }
+                        Ok(())
                     },
                     Message::Result,
                 );
@@ -1197,7 +1202,7 @@ impl Launcher {
                         Task::perform(
                             async move {
                                 tokio::task::spawn_blocking(move || {
-                                    windows::place("class:^command-space$", rect)
+                                    windows::place("class:^super-space$", rect)
                                 })
                                 .await
                                 .map_err(|e| e.to_string())?
@@ -1633,7 +1638,7 @@ impl Launcher {
                         command.args([
                             "--file-selection",
                             "--title",
-                            "Choose files for Command Space",
+                            "Choose files for Super Space",
                             "--separator",
                             "\n",
                         ]);
@@ -2029,7 +2034,7 @@ impl Launcher {
                                 .args([
                                     "--question",
                                     "--no-markup",
-                                    "--title=Command Space",
+                                    "--title=Super Space",
                                     "--text",
                                     &text,
                                     "--ok-label",
@@ -2095,7 +2100,7 @@ impl Launcher {
                     return Task::perform(
                         async move {
                             let _ = tokio::process::Command::new("notify-send")
-                                .args(["--app-name=Command Space", "--", &title])
+                                .args(["--app-name=Super Space", "--", &title])
                                 .status()
                                 .await;
                         },

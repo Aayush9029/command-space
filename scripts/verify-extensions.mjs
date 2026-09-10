@@ -4,11 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-const binary = process.argv[2] || path.join(os.homedir(), ".local/bin/command-space");
-const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "command-space-lifecycle-"));
+const binary = process.argv[2] || path.join(os.homedir(), ".local/bin/super-space");
+const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "super-space-lifecycle-"));
 const source = path.join(temporary, "source");
 const env = {...process.env, XDG_DATA_HOME:path.join(temporary,"data"), XDG_STATE_HOME:path.join(temporary,"state"), BUN_CONFIG_VERBOSE_FETCH:"false"};
-const root = path.join(env.XDG_DATA_HOME,"command-space");
+const root = path.join(env.XDG_DATA_HOME,"super-space");
 const installed = path.join(root,"extensions/lifecycle-fixture");
 function run(args, success = true) {
   const result = spawnSync(binary,["extension",...args],{env,cwd:temporary,encoding:"utf8",timeout:15000});
@@ -22,7 +22,7 @@ try {
   await fs.writeFile(path.join(source,"package.json"),JSON.stringify(manifest));
   await fs.writeFile(path.join(source,"src/main.ts"),"export default function Command() { return 'first'; }");
   run(["install","source"]);
-  assert.equal(await fs.readFile(path.join(installed,".command-space-source"),"utf8"),source);
+  assert.equal(await fs.readFile(path.join(installed,".super-space-source"),"utf8"),source);
   run(["install",source],false);
   await fs.writeFile(path.join(source,"src/main.ts"),"export default function Command() { return 'updated'; }");
   run(["update","lifecycle-fixture"]);

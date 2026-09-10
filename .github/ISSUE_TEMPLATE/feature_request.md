@@ -5,4 +5,4 @@ title: ""
 labels: enhancement
 ---
 
-What are you trying to do, and how should Command Space help?
+What are you trying to do, and how should Super Space help?

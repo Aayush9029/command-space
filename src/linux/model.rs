@@ -69,21 +69,21 @@ pub fn config_dir() -> PathBuf {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| home().join(".config"))
-        .join("command-space")
+        .join("super-space")
 }
 
 pub fn data_dir() -> PathBuf {
     std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| home().join(".local/share"))
-        .join("command-space")
+        .join("super-space")
 }
 
 pub fn state_dir() -> PathBuf {
     std::env::var_os("XDG_STATE_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| home().join(".local/state"))
-        .join("command-space")
+        .join("super-space")
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

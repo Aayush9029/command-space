@@ -4,7 +4,7 @@ import qs.Ui
 
 BarWidget {
   id: root
-  moduleName: "command-space.launcher"
+  moduleName: "super-space.launcher"
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
   WidgetButton {
@@ -16,7 +16,7 @@ BarWidget {
     horizontalMargin: 7.5
     onPressed: function(mouseButton) {
       if (mouseButton === Qt.RightButton && root.bar) root.bar.run("xdg-terminal-exec")
-      else Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/command-space", "toggle"])
+      else Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/super-space", "toggle"])
     }
   }
 }

@@ -6,14 +6,14 @@ import path from "node:path";
 import {WindowManagement} from "../windows.mjs";
 
 async function desktop(t, overrides={}) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(),"command-space-windows-"));
-  const prior = {PATH:process.env.PATH,COMMAND_SPACE_FRONTMOST:process.env.COMMAND_SPACE_FRONTMOST};
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(),"super-space-windows-"));
+  const prior = {PATH:process.env.PATH,SUPER_SPACE_FRONTMOST:process.env.SUPER_SPACE_FRONTMOST};
   const fixture = {
     activewindow:{stableId:"b2"},
     clients:[
       {stableId:"a1",class:"editor",title:"Editor",pid:123,mapped:true,monitor:2,workspace:{id:4,name:"work"},fullscreen:0,at:[-1600,100],size:[800,600]},
       {stableId:"b2",class:"browser",title:"Browser",mapped:true,monitor:0,workspace:{id:1,name:"1"},fullscreen:1,at:[0,30],size:[1920,1050]},
-      {stableId:"c3",class:"command-space",mapped:true},
+      {stableId:"c3",class:"super-space",mapped:true},
       {stableId:"d4",class:"closed",mapped:false},
     ],
     workspaces:[{id:1,name:"1",monitorID:0},{id:4,name:"work",monitorID:2},{id:-99,name:"special:scratchpad",monitorID:2},{id:9,name:"disconnected",monitorID:9}],
@@ -25,7 +25,7 @@ async function desktop(t, overrides={}) {
   await fs.writeFile(data,JSON.stringify(fixture));
   await fs.writeFile(path.join(directory,"hyprctl"),`#!${process.execPath}\nimport fs from "node:fs";\nconst args=process.argv.slice(2);\nif(args[0]==="-j") process.stdout.write(JSON.stringify(JSON.parse(fs.readFileSync(${JSON.stringify(data)},"utf8"))[args[1]]));\nelse {fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(args[1])+"\\n");process.stdout.write("ok\\n");}\n`,{mode:0o700});
   process.env.PATH=`${directory}:${prior.PATH}`;
-  process.env.COMMAND_SPACE_FRONTMOST=JSON.stringify({stableId:"a1",monitor:2});
+  process.env.SUPER_SPACE_FRONTMOST=JSON.stringify({stableId:"a1",monitor:2});
   t.after(async()=>{
     for(const [key,value] of Object.entries(prior)) if(value===undefined) delete process.env[key]; else process.env[key]=value;
     await fs.rm(directory,{recursive:true,force:true});

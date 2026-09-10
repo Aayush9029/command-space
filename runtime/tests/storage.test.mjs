@@ -13,7 +13,7 @@ const storageModule = new URL("../storage.mjs", import.meta.url).href;
 const apiModule = new URL("../api.mjs", import.meta.url).href;
 
 async function fixture(t) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "command-space-storage-"));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "super-space-storage-"));
   t.after(() => fs.rm(directory, {recursive: true, force: true}));
   return directory;
 }
@@ -22,7 +22,7 @@ test("concurrent invocation storage and cache writes preserve every key and name
   const directory = await fixture(t);
   await Promise.all(Array.from({length: 6}, (_, worker) => run(process.execPath, ["--input-type=module", "-e", `
     import {LocalStorage, Cache} from ${JSON.stringify(apiModule)};
-    globalThis.__commandSpace = {environment: {supportPath: ${JSON.stringify(directory)}}};
+    globalThis.__superSpace = {environment: {supportPath: ${JSON.stringify(directory)}}};
     const cache = new Cache({namespace: "shared"}), own = new Cache({namespace: "worker-${worker}"});
     for (let index = 0; index < 12; index++) {
       await LocalStorage.setItem("${worker}:" + index, index);

@@ -9,7 +9,7 @@ with tarfile.open(archive, "r:gz") as bundle:
     paths = set()
     for member in members:
         path = pathlib.PurePosixPath(member.name)
-        if path.is_absolute() or ".." in path.parts or not path.parts or path.parts[0] != "command-space":
+        if path.is_absolute() or ".." in path.parts or not path.parts or path.parts[0] != "super-space":
             raise ValueError("Release archive contains an invalid path")
         if not member.isfile() and not member.isdir():
             raise ValueError("Release archive contains a link or special file")

@@ -7,14 +7,14 @@ import {WindowManagement} from "../runtime/windows.mjs";
 
 const run=promisify(execFile);
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const binary=process.env.COMMAND_SPACE_BINARY || path.join(root,"target/debug/command-space");
-const id=process.env.COMMAND_SPACE_WINDOW_TEST_ID;
-assert.ok(id,"Set COMMAND_SPACE_WINDOW_TEST_ID to a disposable validation window");
+const binary=process.env.SUPER_SPACE_BINARY || path.join(root,"target/debug/super-space");
+const id=process.env.SUPER_SPACE_WINDOW_TEST_ID;
+assert.ok(id,"Set SUPER_SPACE_WINDOW_TEST_ID to a disposable validation window");
 const query=async name=>JSON.parse((await run("hyprctl",["-j",name])).stdout);
 const evalLua=async code=>assert.equal((await run("hyprctl",["eval",code])).stdout.trim(),"ok");
 const read=async()=>{
   const client=(await query("clients")).find(client=>client.stableId===id);
-  assert.equal(client?.class,"command-space-window-validation","Only an explicitly marked disposable window can be tested");
+  assert.equal(client?.class,"super-space-window-validation","Only an explicitly marked disposable window can be tested");
   return client;
 };
 function geometryEqual(actual,expected,label="geometry") {
@@ -23,7 +23,7 @@ function geometryEqual(actual,expected,label="geometry") {
 }
 const before=await read();
 assert.ok(before.workspace.id>=9900,"Use an isolated validation workspace");
-process.env.COMMAND_SPACE_FRONTMOST=JSON.stringify(before);
+process.env.SUPER_SPACE_FRONTMOST=JSON.stringify(before);
 const target=JSON.stringify(`stableid:${id}`);
 const monitor=(await query("monitors")).find(monitor=>monitor.id===before.monitor);
 const scale=Math.round(monitor.scale*120)/120,rotated=monitor.transform%2!==0;
@@ -105,13 +105,13 @@ try {
     assert.notEqual((await operate("previous-display")).monitor,before.monitor);
     assert.equal((await operate("restore")).monitor,before.monitor);
   }
-  if(process.env.COMMAND_SPACE_WINDOW_VISIBLE_TEST){
+  if(process.env.SUPER_SPACE_WINDOW_VISIBLE_TEST){
     assert.equal((await operate("toggle-pin")).pinned,true);
     assert.equal((await operate("restore")).pinned,false);
-    const secondId=process.env.COMMAND_SPACE_SECOND_WINDOW_TEST_ID;
+    const secondId=process.env.SUPER_SPACE_SECOND_WINDOW_TEST_ID;
     if(secondId){
       const second=(await query("clients")).find(client=>client.stableId===secondId);
-      assert.equal(second?.class,"command-space-window-validation");
+      assert.equal(second?.class,"super-space-window-validation");
       assert.equal(second.workspace.id,before.workspace.id);
       await evalLua(`hl.dispatch(hl.dsp.window.float({window=${JSON.stringify(`stableid:${secondId}`)},action="disable"}))`);
       const layouts=new Set([JSON.stringify(bounds(await operate("tile")))]);

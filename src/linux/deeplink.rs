@@ -19,7 +19,7 @@ pub fn parse(value: &str) -> Result<Destination, String> {
     let url = url::Url::parse(value).map_err(|e| e.to_string())?;
     if !matches!(
         url.scheme(),
-        "command-space" | "rustcast" | "raycast" | "com.raycast"
+        "super-space" | "command-space" | "rustcast" | "raycast" | "com.raycast"
     ) {
         return Err("Unsupported launcher URL scheme".into());
     }
@@ -115,9 +115,29 @@ pub fn parse(value: &str) -> Result<Destination, String> {
 mod tests {
     use super::*;
     #[test]
+    fn saved_links_from_previous_name_still_resolve() {
+        for suffix in [
+            "clipboard",
+            "menu/install",
+            "extension/fixture/receive?arguments=%7B%22text%22%3A%22hello%22%7D",
+        ] {
+            assert_eq!(
+                parse(&format!("command-space://{suffix}")).unwrap(),
+                parse(&format!("super-space://{suffix}")).unwrap()
+            );
+        }
+        let callback = "command-space://oauth?code=fixture&state=fixture";
+        assert_eq!(
+            parse(callback).unwrap(),
+            Destination::OAuth(callback.into())
+        );
+        assert!(parse("command-space://extension/a/../../shell").is_err());
+    }
+
+    #[test]
     fn routes_and_encoded_extension_arguments() {
         assert_eq!(
-            parse("command-space://clipboard").unwrap(),
+            parse("super-space://clipboard").unwrap(),
             Destination::Route("builtin:clipboard".into())
         );
         assert_eq!(
@@ -125,8 +145,8 @@ mod tests {
             Destination::Search("12 cm to in".into())
         );
         assert_eq!(parse("raycast://extensions/author/base64/decode?arguments=%7B%22text%22%3A%22aGVsbG8%3D%22%7D").unwrap(), Destination::Extension { extension:"base64".into(), command:"decode".into(), arguments:serde_json::json!({"text":"aGVsbG8="}), launch_context:Value::Null, background:false, fallback_text:None });
-        assert!(parse("command-space://extension/a/../../shell").is_err());
-        assert!(parse("command-space://extension/a/b?arguments=[]").is_err());
+        assert!(parse("super-space://extension/a/../../shell").is_err());
+        assert!(parse("super-space://extension/a/b?arguments=[]").is_err());
     }
 
     #[test]
@@ -144,7 +164,7 @@ mod tests {
         ] {
             assert!(
                 parse(&format!(
-                    "command-space://extension/fixture/receive?{parameters}"
+                    "super-space://extension/fixture/receive?{parameters}"
                 ))
                 .is_err()
             );

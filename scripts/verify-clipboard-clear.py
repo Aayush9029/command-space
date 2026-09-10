@@ -8,12 +8,12 @@ import sys
 import time
 
 home = Path.home()
-root = home / ".local/state/command-space/clipboard-validation"
-binary = home / ".local/bin/command-space"
-unit = "command-space-clipboard-validation"
+root = home / ".local/state/super-space/clipboard-validation"
+binary = home / ".local/bin/super-space"
+unit = "super-space-clipboard-validation"
 original = home / ".local/state/omarchy/clipboard-history.json"
 history = root / "state/omarchy/clipboard-history.json"
-config = home / ".config/command-space/config.toml"
+config = home / ".config/super-space/config.toml"
 
 
 def digest(path):
@@ -26,7 +26,7 @@ def run(*arguments):
 
 def restore():
     subprocess.run(["systemctl", "--user", "stop", unit], check=False)
-    run("systemctl", "--user", "start", "command-space")
+    run("systemctl", "--user", "start", "super-space")
 
 
 if sys.argv[1:] == ["prepare"]:
@@ -34,7 +34,7 @@ if sys.argv[1:] == ["prepare"]:
     (root / "data").mkdir(exist_ok=True)
     (root / "snapshot.json").write_text(json.dumps({"history": digest(original), "config": digest(config)}))
     history.write_text(json.dumps([{"type": "text", "text": "Disposable clipboard validation one"}, {"type": "text", "text": "Disposable clipboard validation two"}]))
-    run("systemctl", "--user", "stop", "command-space")
+    run("systemctl", "--user", "stop", "super-space")
     try:
         run("systemd-run", "--user", "--quiet", "--collect", f"--unit={unit}", f"--setenv=XDG_STATE_HOME={root}/state", f"--setenv=XDG_DATA_HOME={root}/data", f"--setenv=PATH={home}/.local/bin:{home}/.local/share/mise/shims:/usr/share/omarchy/bin:/usr/bin", str(binary), "daemon")
         for _ in range(100):

@@ -13,12 +13,12 @@ const native = fileURLToPath(new URL("../browser-native.mjs", import.meta.url));
 
 test("browser integration preserves existing extensions and reverses only its own registration", () => {
   const original = "--ozone-platform=wayland\n--load-extension=/first,/second\n";
-  const configured = chromiumFlags(original,"/command-space",true);
-  assert.equal(chromiumFlags(configured,"/command-space",true), configured);
-  assert.equal(chromiumFlags(configured,"/command-space",false), original);
+  const configured = chromiumFlags(original,"/super-space",true);
+  assert.equal(chromiumFlags(configured,"/super-space",true), configured);
+  assert.equal(chromiumFlags(configured,"/super-space",false), original);
   const quoted = chromiumFlags("--load-extension='/first path'\n", "/second path", true);
   assert.equal(quoted,"'--load-extension=/first path,/second path'\n");
-  assert.equal(chromiumFlags("--ozone-platform=wayland\n", "/command-space", false), "--ozone-platform=wayland\n");
+  assert.equal(chromiumFlags("--ozone-platform=wayland\n", "/super-space", false), "--ozone-platform=wayland\n");
 });
 async function bridge(t, handler) {
   const directory = await mkdtemp(path.join(tmpdir(), "cs-browser-"));
@@ -48,7 +48,7 @@ async function bridge(t, handler) {
     await rm(directory, {recursive:true, force:true});
   });
   await Promise.race([startup, new Promise((_, reject) => setTimeout(() => reject(new Error("Browser bridge did not start")), 3000).unref())]);
-  return {child, directory, socket:path.join(directory, "command-space-browser", `${child.pid}.sock`)};
+  return {child, directory, socket:path.join(directory, "super-space-browser", `${child.pid}.sock`)};
 }
 
 test("browser API crosses native framing and a private socket, preserving Unicode and errors", async t => {

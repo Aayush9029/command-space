@@ -46,7 +46,7 @@ export async function sshKeys(values, { execute = run, signal, fetcher = fetch }
   keys = [...new Set(keys)];
   const field = values.source === "github" ? "username" : "key";
   if (!keys.length || keys.length > 32) throw new FieldError(field, "Provide between 1 and 32 SSH public keys");
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "command-space-public-key-"));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "super-space-public-key-"));
   try {
     const file = path.join(directory, "key.pub");
     for (const key of keys) {
@@ -93,15 +93,15 @@ export async function drivePassword(values, { execute = run, signal } = {}) {
 
 export async function launchTerminalOperation(operation, values, { assetsPath, execute = run, signal } = {}) {
   if (!["sshd", "windows", "drive-password"].includes(operation)) throw new Error("Unknown system operation");
-  const folder = await fs.mkdtemp(path.join(os.tmpdir(), "command-space-operation-"));
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(), "super-space-operation-"));
   await fs.chmod(folder, 0o700);
   const payload = path.join(folder, "operation.json");
   await fs.writeFile(payload, JSON.stringify({ operation, values }), { mode: 0o600 });
   try {
     const helper = path.join(assetsPath, "native-operation.mjs");
     await fs.access(helper);
-    await execute("systemd-run", ["--user", "--quiet", "--collect", `--unit=command-space-operation-${randomUUID()}`,
-      "--", "xdg-terminal-exec", "--app-id=org.commandspace.authentication", "--title=Command Space",
+    await execute("systemd-run", ["--user", "--quiet", "--collect", `--unit=super-space-operation-${randomUUID()}`,
+      "--", "xdg-terminal-exec", "--app-id=org.superspace.authentication", "--title=Super Space",
       "-e", process.execPath, helper, payload], { signal });
   } catch (error) { await fs.rm(folder, { recursive: true, force: true }); throw error; }
   return payload;

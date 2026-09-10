@@ -31,7 +31,7 @@ pub async fn install(version: String) -> Result<(), String> {
             "--user",
             "--quiet",
             "--collect",
-            "--unit=command-space-update",
+            "--unit=super-space-update",
         ])
         .arg(format!(
             "--setenv=PATH={}",
@@ -55,7 +55,7 @@ pub fn entries(release: &Release) -> Vec<Entry> {
     if release.available {
         entries.push(Entry::new(
             "install-update",
-            &format!("Install Command Space {}", release.version),
+            &format!("Install Super Space {}", release.version),
             "Download the verified Linux package and restart the launcher",
             "",
             Action::Builtin("install-update".into()),
@@ -79,7 +79,7 @@ pub fn entries(release: &Release) -> Vec<Entry> {
     entries.push(Entry::new(
         "check-updates",
         "Check again",
-        "Check the Command Space GitHub releases",
+        "Check the Super Space GitHub releases",
         "",
         Action::Builtin("updates".into()),
     ));

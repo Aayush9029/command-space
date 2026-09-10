@@ -12,7 +12,7 @@ const runtime = path.resolve(extension, "../../runtime/host.mjs");
 const nodes = tree => tree.flatMap(node => [node, ...nodes(node.children || [])]);
 
 async function fixture(t, command) {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), "command-space-workflow-host-"));
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), "super-space-workflow-host-"));
   await fs.mkdir(path.join(home, "bin"));
   for (const command of ["omarchy-webapp-install", "omarchy-tui-install", "omarchy-reminder", "omarchy-menu-share", "omarchy-transcode", "omarchy-transcode-ascii", "omarchy-theme-bg-set", "omarchy-games-retro-cores", "omarchy-games-retro-install", "omarchy-theme-install", "omarchy-git-url-check", "omarchy-plugin-add", "omarchy-plugin-catalog", "omarchy-plugin-enable", "omarchy-dns", "systemd-run"]) {
     const source = `#!/usr/bin/env python3

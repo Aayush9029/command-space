@@ -25,21 +25,21 @@ test("window dimensions accept exact pixel integers and reject lossy or invalid 
 });
 
 async function fixture(t, command, fullscreen = false) {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), "command-space-window-form-"));
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), "super-space-window-form-"));
   await fs.mkdir(path.join(home, "bin"));
   const target = { id: "42", stableId: "42", title: "Recorded window", class: "fixture", mapped: true, at: [120, 80], size: [800, 600], workspace: { id: 1, name: "work" }, fullscreen: fullscreen ? 2 : 0, pid: 1234, monitor: 0 };
-  const launcher = { ...target, id: "99", stableId: "99", title: "Command Space", class: "command-space" };
+  const launcher = { ...target, id: "99", stableId: "99", title: "Super Space", class: "super-space" };
   await fs.writeFile(path.join(home, "clients.json"), JSON.stringify([target, launcher]));
   await fs.writeFile(path.join(home, "bin/hyprctl"), `#!${process.execPath}
 const fs=require('node:fs');
 const path=require('node:path');
 const args=process.argv.slice(2);
 const clients=JSON.parse(fs.readFileSync(path.join(process.env.HOME,'clients.json')));
-if(args[0]==='-j')console.log(JSON.stringify(args[1]==='clients'?clients:clients.find(window=>window.class==='command-space')));
+if(args[0]==='-j')console.log(JSON.stringify(args[1]==='clients'?clients:clients.find(window=>window.class==='super-space')));
 else if(args[0]==='eval'){fs.appendFileSync(path.join(process.env.HOME,'dispatches.jsonl'),JSON.stringify(args[1])+'\\n');console.log('ok')}
 else process.exit(1);
 `, { mode: 0o755 });
-  const child = spawn(process.execPath, [runtime], { env: { ...process.env, HOME: home, PATH: `${home}/bin:${process.env.PATH}`, XDG_DATA_HOME: path.join(home, "data"), COMMAND_SPACE_FRONTMOST: JSON.stringify(target) } });
+  const child = spawn(process.execPath, [runtime], { env: { ...process.env, HOME: home, PATH: `${home}/bin:${process.env.PATH}`, XDG_DATA_HOME: path.join(home, "data"), SUPER_SPACE_FRONTMOST: JSON.stringify(target) } });
   const messages = [];
   let stderr = "";
   readline.createInterface({ input: child.stdout }).on("line", line => messages.push(JSON.parse(line)));

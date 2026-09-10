@@ -6,7 +6,7 @@ import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 
 const runtime = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const root = process.env.COMMAND_SPACE_TEST_EXTENSIONS;
+const root = process.env.SUPER_SPACE_TEST_EXTENSIONS;
 const enabled = Boolean(root && process.env.WAYLAND_DISPLAY);
 const nodes = tree => tree.flatMap(node => [node, ...nodes(node.children || [])]);
 
@@ -37,11 +37,11 @@ function clipboard(text) { execFileSync("wl-copy", [], { input: text, stdio: ["p
 function readClipboard() { return execFileSync("wl-paste", ["--no-newline", "--type", "text"], { encoding: "utf8" }); }
 
 test("unmodified Raycast Base64 renders with @raycast/utils and copies output", { skip: !enabled }, async t => {
-  clipboard("Command Space compatibility");
+  clipboard("Super Space compatibility");
   const host = await worker(t, "base64", "index");
   const first = await host.wait(message => message.type === "render" && nodes(message.tree).some(node => node.type === "List.Item" && node.props.title === "Encode"));
   const item = nodes(first.tree).find(node => node.type === "List.Item" && node.props.title === "Encode");
-  assert.equal(item.props.subtitle, Buffer.from("Command Space compatibility").toString("base64"));
+  assert.equal(item.props.subtitle, Buffer.from("Super Space compatibility").toString("base64"));
   const action = nodes([item]).find(node => node.type === "Action");
   host.send({ type: "event", callback: action.props.onAction.$callback, args: [] });
   const deadline = Date.now() + 3000;
@@ -69,7 +69,7 @@ test("unmodified JSON Format uses a React form, nested detail navigation, and cl
   const host = await worker(t,"json-format","index");
   const first = await host.wait(message => message.type === "render" && nodes(message.tree).some(node => node.type === "Form.TextArea"));
   const input = nodes(first.tree).find(node => node.type === "Form.TextArea");
-  const value = JSON.stringify({project:"Command Space",linux:true,plugins:["TypeScript","React"]});
+  const value = JSON.stringify({project:"Super Space",linux:true,plugins:["TypeScript","React"]});
   host.send({type:"event",callback:input.props.onChange.$callback,field:input.props.id,inputRevision:1,args:[value]});
   const updated = await host.wait(message => message.type === "render" && nodes(message.tree).some(node => node.props.value === value));
   const action = nodes(updated.tree).find(node => node.props.title === "View Result");

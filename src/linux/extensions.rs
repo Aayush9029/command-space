@@ -239,7 +239,7 @@ pub fn install_location(location: &str, replace: bool) -> Result<String, String>
             .map_err(|e| e.to_string())?;
         let name = install_source(&source, replace)?;
         fs::write(
-            root().join(&name).join(".command-space-source"),
+            root().join(&name).join(".super-space-source"),
             source.to_string_lossy().as_bytes(),
         )
         .map_err(|e| e.to_string())?;
@@ -314,7 +314,7 @@ pub fn install_location(location: &str, replace: bool) -> Result<String, String>
             return Err("Could not check out the extension source".into());
         }
         let name = install_source(&checkout.join(subdir), replace)?;
-        fs::write(root().join(&name).join(".command-space-source"), location)
+        fs::write(root().join(&name).join(".super-space-source"), location)
             .map_err(|e| e.to_string())?;
         Ok(name)
     })();
@@ -327,7 +327,7 @@ pub fn update(name: &str) -> Result<String, String> {
         .into_iter()
         .find(|m| m.name == name)
         .ok_or("Extension is not installed")?;
-    let location = fs::read_to_string(root().join(installed.name).join(".command-space-source"))
+    let location = fs::read_to_string(root().join(installed.name).join(".super-space-source"))
         .map_err(|_| {
             "Choose the extension source folder or GitHub URL to update this extension".to_string()
         })?;
@@ -474,7 +474,7 @@ impl Session {
             .ok_or_else(|| format!("Extension command is not installed: {extension}/{command}"))?;
         static NEXT_ID: AtomicU64 = AtomicU64::new(1);
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        let runtime = std::env::var_os("COMMAND_SPACE_RUNTIME")
+        let runtime = std::env::var_os("SUPER_SPACE_RUNTIME")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
                 let installed = data_dir().join("runtime");
@@ -488,16 +488,16 @@ impl Session {
             .arg(runtime.join("host.mjs"))
             .process_group(0)
             .env(
-                "COMMAND_SPACE_AI_CONFIG",
+                "SUPER_SPACE_AI_CONFIG",
                 serde_json::to_string(&super::model::Config::load().unwrap_or_default().ai)
                     .map_err(|e| e.to_string())?,
             )
             .env(
-                "COMMAND_SPACE_FRONTMOST",
+                "SUPER_SPACE_FRONTMOST",
                 serde_json::to_string(&context.previous).map_err(|e| e.to_string())?,
             )
             .env(
-                "COMMAND_SPACE_BINARY",
+                "SUPER_SPACE_BINARY",
                 std::env::current_exe().map_err(|e| e.to_string())?,
             )
             .stdin(Stdio::piped())

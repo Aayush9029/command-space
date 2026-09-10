@@ -8,13 +8,13 @@ import { createImages } from "../images.mjs";
 import { resolveIcon } from "../icon-catalog.mjs";
 
 test("remote extension images are downloaded, rendered from disk, and reused across workers", async t => {
-  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"command-space-images-"));
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"super-space-images-"));
   const content = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><rect width="24" height="24" fill="red"/></svg>';
   let count = 0;
   const server = http.createServer((req,res) => { count++; assert.equal(req.headers["x-image-token"],"fixture"); res.writeHead(200,{"Content-Type":"image/svg+xml"}); res.end(content); });
   await new Promise(resolve => server.listen(0,"127.0.0.1",resolve));
-  t.after(async () => {server.close(); delete globalThis.__commandSpace; await fs.rm(folder,{recursive:true,force:true});});
-  globalThis.__commandSpace = {environment:{supportPath:folder,assetsPath:folder}};
+  t.after(async () => {server.close(); delete globalThis.__superSpace; await fs.rm(folder,{recursive:true,force:true});});
+  globalThis.__superSpace = {environment:{supportPath:folder,assetsPath:folder}};
   let changed;
   const ready = new Promise(resolve => {changed = resolve;});
   const resolve = createImages(changed);
@@ -30,11 +30,11 @@ test("remote extension images are downloaded, rendered from disk, and reused acr
 });
 
 test("embedded avatars and failed remote images preserve masks, tints and fallbacks", async t => {
-  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"command-space-image-fallback-"));
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"super-space-image-fallback-"));
   const server = http.createServer((_req,res) => {res.writeHead(503);res.end();});
   await new Promise(resolve => server.listen(0,"127.0.0.1",resolve));
-  t.after(async()=>{server.close(); delete globalThis.__commandSpace; await fs.rm(folder,{recursive:true,force:true});});
-  globalThis.__commandSpace = {environment:{supportPath:folder,assetsPath:folder}};
+  t.after(async()=>{server.close(); delete globalThis.__superSpace; await fs.rm(folder,{recursive:true,force:true});});
+  globalThis.__superSpace = {environment:{supportPath:folder,assetsPath:folder}};
   let changed;
   const ready = new Promise(resolve=>{changed=resolve;});
   const resolve = createImages(changed);
@@ -49,7 +49,7 @@ test("embedded avatars and failed remote images preserve masks, tints and fallba
 
 
 test("named icons preserve explicit tint, masks, adaptive sources, and accessory icons", () => {
-  globalThis.__commandSpace = {environment:{appearance:"dark"}};
+  globalThis.__superSpace = {environment:{appearance:"dark"}};
   try {
     const resolve = createImages(() => {});
     const values = resolve({icon:{source:{light:"icon:Sun",dark:"icon:Moon"},tintColor:"red",mask:"circle"},accessories:[{icon:"icon:CheckCircle",text:"Ready"}]});
@@ -58,15 +58,15 @@ test("named icons preserve explicit tint, masks, adaptive sources, and accessory
     assert.equal(values.icon.mask,"circle");
     assert.equal(values.accessories[0].icon.source,resolveIcon("CheckCircle"));
     assert.equal(values.accessories[0].icon.tintColor,"primarytext");
-  } finally { delete globalThis.__commandSpace; }
+  } finally { delete globalThis.__superSpace; }
 });
 
 test("non-image HTTP responses fall back without caching HTML as a PNG", async t => {
-  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"command-space-image-content-"));
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"super-space-image-content-"));
   const server = http.createServer((_req,res) => {res.writeHead(200,{"Content-Type":"image/png"});res.end("<html>Rate limit</html>");});
   await new Promise(resolve => server.listen(0,"127.0.0.1",resolve));
-  t.after(async()=>{server.close();delete globalThis.__commandSpace;await fs.rm(folder,{recursive:true,force:true});});
-  globalThis.__commandSpace = {environment:{supportPath:folder}};
+  t.after(async()=>{server.close();delete globalThis.__superSpace;await fs.rm(folder,{recursive:true,force:true});});
+  globalThis.__superSpace = {environment:{supportPath:folder}};
   let changed;
   const ready = new Promise(resolve => {changed=resolve;});
   const resolve = createImages(changed);
@@ -77,9 +77,9 @@ test("non-image HTTP responses fall back without caching HTML as a PNG", async t
 });
 
 test("embedded image cache evicts old files at its bounded entry limit", async t => {
-  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"command-space-image-budget-"));
-  t.after(async()=>{delete globalThis.__commandSpace;await fs.rm(folder,{recursive:true,force:true});});
-  globalThis.__commandSpace = {environment:{supportPath:folder}};
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"super-space-image-budget-"));
+  t.after(async()=>{delete globalThis.__superSpace;await fs.rm(folder,{recursive:true,force:true});});
+  globalThis.__superSpace = {environment:{supportPath:folder}};
   const resolve = createImages(() => {});
   for (let index=0;index<260;index++) {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><path id="item-${index}" d="M0 0h16v16H0z"/></svg>`;
@@ -90,9 +90,9 @@ test("embedded image cache evicts old files at its bounded entry limit", async t
 });
 
 test("GIF avatars and ICO/BMP icons retain their detected formats", async t => {
-  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"command-space-image-formats-"));
-  t.after(async()=>{delete globalThis.__commandSpace;await fs.rm(folder,{recursive:true,force:true});});
-  globalThis.__commandSpace = {environment:{supportPath:folder}};
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"super-space-image-formats-"));
+  t.after(async()=>{delete globalThis.__superSpace;await fs.rm(folder,{recursive:true,force:true});});
+  globalThis.__superSpace = {environment:{supportPath:folder}};
   const resolve = createImages(() => {});
   const gif = Buffer.from("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", "base64");
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aE1cAAAAASUVORK5CYII=", "base64");

@@ -5,7 +5,7 @@ import vm from "node:vm";
 import { execFileSync } from "node:child_process";
 
 const omarchy = process.env.OMARCHY_PATH || "/usr/share/omarchy";
-const binary = process.argv[2] || "./target/debug/command-space";
+const binary = process.argv[2] || "./target/debug/super-space";
 const context = { module: { exports: {} } };
 vm.runInNewContext(fs.readFileSync(path.join(omarchy, "shell/plugins/menu/MenuModel.js"), "utf8"), context);
 const model = context.module.exports;

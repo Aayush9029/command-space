@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WindowManagement } from "../windows.mjs";
 
-const target = process.env.COMMAND_SPACE_WINDOW_TEST_ID;
+const target = process.env.SUPER_SPACE_WINDOW_TEST_ID;
 test("Linux window API reads and resizes an explicitly selected disposable test window", {skip:!target}, async () => {
-  process.env.COMMAND_SPACE_FRONTMOST = JSON.stringify({id:target});
+  process.env.SUPER_SPACE_FRONTMOST = JSON.stringify({id:target});
   const initial = await WindowManagement.getActiveWindow();
   assert.equal(initial.id,target);
   assert.ok(initial.positionable && initial.resizable);

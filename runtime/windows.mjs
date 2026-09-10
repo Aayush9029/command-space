@@ -3,9 +3,9 @@ import {promisify} from "node:util";
 const execute = promisify(execFile);
 const query = async command => JSON.parse((await execute("hyprctl",["-j",command])).stdout);
 const evaluate = async code => { const {stdout,stderr} = await execute("hyprctl",["eval",code]); if (stdout.trim() !== "ok") throw new Error(`Hyprland: ${stdout}${stderr}`); };
-const previous = () => JSON.parse(process.env.COMMAND_SPACE_FRONTMOST || "null");
+const previous = () => JSON.parse(process.env.SUPER_SPACE_FRONTMOST || "null");
 const id = window => String(window?.stableId ?? window?.id ?? "");
-const available = window => window.mapped && window.class !== "command-space";
+const available = window => window.mapped && window.class !== "super-space";
 const workspaceSelector = workspace => workspace.id < 0 || /^\d+$/.test(workspace.name) ? workspace.name : `name:${workspace.name}`;
 function windowValue(window, active) {
   return {id:id(window),title:window.title,active:id(window)===id(active),desktopId:String(window.workspace.id),fullScreenSettable:true,positionable:true,resizable:true,
@@ -13,7 +13,7 @@ function windowValue(window, active) {
     application:{name:window.class,bundleId:window.class,path:"",pid:window.pid}};
 }
 export const WindowManagement = {
-  __commandSpaceCapability:"windows",
+  __superSpaceCapability:"windows",
   DesktopType:{User:"user",FullScreen:"fullScreen"},
   async getWindows() {
     const active = previous() || await query("activewindow");

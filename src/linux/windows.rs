@@ -95,7 +95,7 @@ pub fn clients() -> Vec<Client> {
         .and_then(|v| serde_json::from_value::<Vec<Client>>(v).ok())
         .unwrap_or_default()
         .into_iter()
-        .filter(|c| c.mapped && c.class != "command-space")
+        .filter(|c| c.mapped && c.class != "super-space")
         .collect()
 }
 
@@ -104,7 +104,7 @@ impl Context {
         let previous = query("activewindow")
             .ok()
             .and_then(|v| serde_json::from_value::<Client>(v).ok())
-            .filter(|c| c.mapped && c.class != "command-space");
+            .filter(|c| c.mapped && c.class != "super-space");
         let monitors = query("monitors").unwrap_or_default();
         let cursor = if follow_mouse {
             query("cursorpos").unwrap_or_default()
@@ -298,9 +298,7 @@ fn launcher_target(windows: &Value, pid: u32) -> Result<String, String> {
         .as_array()
         .and_then(|windows| {
             windows.iter().rev().find(|window| {
-                window["mapped"] == true
-                    && window["class"] == "command-space"
-                    && window["pid"] == pid
+                window["mapped"] == true && window["class"] == "super-space" && window["pid"] == pid
             })
         })
         .and_then(|window| window["stableId"].as_str())
@@ -741,11 +739,11 @@ mod tests {
     #[test]
     fn launcher_raise_targets_only_the_current_process_mapped_launcher() {
         let windows = serde_json::json!([
-            {"mapped":true,"class":"command-space","pid":12,"stableId":"abc1"},
-            {"mapped":true,"class":"command-space","pid":12,"stableId":"abc2"},
-            {"mapped":true,"class":"command-space","pid":34,"stableId":"abc3"},
+            {"mapped":true,"class":"super-space","pid":12,"stableId":"abc1"},
+            {"mapped":true,"class":"super-space","pid":12,"stableId":"abc2"},
+            {"mapped":true,"class":"super-space","pid":34,"stableId":"abc3"},
             {"mapped":true,"class":"terminal","pid":12,"stableId":"abc4"},
-            {"mapped":false,"class":"command-space","pid":12,"stableId":"abc5"}
+            {"mapped":false,"class":"super-space","pid":12,"stableId":"abc5"}
         ]);
         assert_eq!(launcher_target(&windows, 12).unwrap(), "stableid:abc2");
         assert!(launcher_target(&windows, 56).is_err());

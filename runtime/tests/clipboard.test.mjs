@@ -6,18 +6,18 @@ import path from "node:path";
 import {execFileSync} from "node:child_process";
 import {Clipboard} from "../clipboard.mjs";
 
-const enabled = Boolean(process.env.COMMAND_SPACE_CLIPBOARD_TEST && process.env.WAYLAND_DISPLAY);
+const enabled = Boolean(process.env.SUPER_SPACE_CLIPBOARD_TEST && process.env.WAYLAND_DISPLAY);
 
 test("Wayland clipboard preserves HTML alternatives, files, and confidential MIME hints", {skip:!enabled}, async t => {
-  globalThis.__commandSpace = {launcherPath:process.env.COMMAND_SPACE_BINARY || "command-space",emit:()=>{}};
-  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"command-space-clipboard-"));
-  t.after(async () => {await Clipboard.copy("Command Space clipboard validation complete"); await fs.rm(folder,{recursive:true,force:true});});
+  globalThis.__superSpace = {launcherPath:process.env.SUPER_SPACE_BINARY || "super-space",emit:()=>{}};
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(),"super-space-clipboard-"));
+  t.after(async () => {await Clipboard.copy("Super Space clipboard validation complete"); await fs.rm(folder,{recursive:true,force:true});});
   await Clipboard.copy({text:"Rich text fixture",html:"<b>Rich text fixture</b>"});
   assert.deepEqual(await Clipboard.read(),{text:"Rich text fixture",html:"<b>Rich text fixture</b>"});
   const file = path.join(folder,"file with spaces #1.txt"); await fs.writeFile(file,"fixture");
   await Clipboard.copy({file}); assert.equal((await Clipboard.read()).file,file);
   await assert.rejects(Clipboard.copy({file:path.join(folder,"missing.txt")}),/does not exist/);
-  const confidential = `Command Space confidential fixture ${Date.now()}`;
+  const confidential = `Super Space confidential fixture ${Date.now()}`;
   await Clipboard.copy(confidential,{concealed:true});
   assert.equal(await Clipboard.readText(),confidential);
   const types = execFileSync("wl-paste",["--list-types"],{encoding:"utf8"});
@@ -32,7 +32,7 @@ test("Wayland clipboard preserves HTML alternatives, files, and confidential MIM
 
 
 test("clipboard history offsets preserve text and image entries", async t => {
-  const state = await fs.mkdtemp(path.join(os.tmpdir(),"command-space-history-"));
+  const state = await fs.mkdtemp(path.join(os.tmpdir(),"super-space-history-"));
   const original = process.env.XDG_STATE_HOME;
   t.after(async () => {if (original === undefined) delete process.env.XDG_STATE_HOME; else process.env.XDG_STATE_HOME=original; await fs.rm(state,{recursive:true,force:true});});
   process.env.XDG_STATE_HOME=state;

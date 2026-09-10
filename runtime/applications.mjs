@@ -6,7 +6,7 @@ import {fileURLToPath} from "node:url";
 
 const execute = promisify(execFile);
 const run = async (program,args) => (await execute(program,args,{encoding:"utf8",timeout:5000,maxBuffer:4*1024*1024})).stdout;
-const bridge = () => globalThis.__commandSpace;
+const bridge = () => globalThis.__superSpace;
 
 async function mimeType(target) {
   if (target instanceof URL) target = target.href;
@@ -50,7 +50,7 @@ export async function getDefaultApplication(target) {
 }
 
 export async function getFrontmostApplication() {
-  const previous = JSON.parse(process.env.COMMAND_SPACE_FRONTMOST || "null");
+  const previous = JSON.parse(process.env.SUPER_SPACE_FRONTMOST || "null");
   const active = previous || JSON.parse(await run("hyprctl",["-j","activewindow"]));
   const apps = await getApplications();
   const app = apps.find(app => app.bundleId?.toLowerCase() === active.class?.toLowerCase());

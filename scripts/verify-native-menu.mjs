@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 
-const binary = process.argv[2] || "./target/debug/command-space";
+const binary = process.argv[2] || "./target/debug/super-space";
 const exec = (command, args = []) => execFileSync(command, args, { encoding: "utf8", timeout: 60000, maxBuffer: 80 * 1024 * 1024 }).trim();
 const shell = command => exec("bash", ["-lc", command]);
 const rows = route => JSON.parse(exec(binary, ["menu", "provider", route]));

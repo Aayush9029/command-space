@@ -15,7 +15,7 @@ pub fn socket_path() -> PathBuf {
                     .uid()
             ))
         })
-        .join("command-space.sock")
+        .join("super-space.sock")
 }
 
 pub fn send(command: &str, route: &str) -> std::io::Result<()> {

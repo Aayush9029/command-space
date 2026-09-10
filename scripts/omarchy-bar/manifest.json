@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "command-space.launcher",
-  "name": "Command Space",
+  "id": "super-space.launcher",
+  "name": "Super Space",
   "version": "0.1.0",
-  "author": "Command Space",
-  "description": "Open the native Command Space launcher",
+  "author": "Super Space",
+  "description": "Open the native Super Space launcher",
   "kinds": ["bar-widget"],
   "entryPoints": {"barWidget": "BarWidget.qml"},
-  "barWidget": {"displayName": "Command Space", "description": "Apps, Omarchy commands, and extensions", "category": "Compositor", "allowMultiple": false}
+  "barWidget": {"displayName": "Super Space", "description": "Apps, Omarchy commands, and extensions", "category": "Compositor", "allowMultiple": false}
 }

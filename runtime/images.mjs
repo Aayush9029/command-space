@@ -81,7 +81,7 @@ export function createImages(onChange) {
     downloads.set(key, { source, expires: Date.now() + age });
   }
   function remote(uri, headers) {
-    const environment = globalThis.__commandSpace?.environment;
+    const environment = globalThis.__superSpace?.environment;
     if (!environment?.supportPath) return null;
     const key = createHash("sha256").update(JSON.stringify([uri, Object.entries(headers || {}).sort(([a], [b]) => a.localeCompare(b))])).digest("hex");
     const cached = downloads.get(key);
@@ -121,7 +121,7 @@ export function createImages(onChange) {
     if (!match || uri.length > 24 * 1024 * 1024) return null;
     try {
       const bytes = match[2] ? Buffer.from(match[3], "base64") : Buffer.from(decodeURIComponent(match[3]));
-      const support = globalThis.__commandSpace?.environment?.supportPath;
+      const support = globalThis.__superSpace?.environment?.supportPath;
       if (!support) return null;
       const extension = imageType(bytes);
       if (!extension) return null;
@@ -138,14 +138,14 @@ export function createImages(onChange) {
       if (/^https?:\/\//.test(value)) return remote(value) ?? (fallback ? image(fallback) : "󰋩");
       if (value.startsWith("data:image/")) return embedded(value) ?? (fallback ? image(fallback) : "󰋩");
       if (value.startsWith("file://")) { try { return decodeURIComponent(new URL(value).pathname); } catch { return "󰋩"; } }
-      const assets = globalThis.__commandSpace?.environment?.assetsPath;
+      const assets = globalThis.__superSpace?.environment?.assetsPath;
       if (assets && value && !path.isAbsolute(value)) {
         try { if (fs.statSync(path.join(assets, value)).isFile()) return path.join(assets, value); } catch {}
       }
       return value;
     }
     if (!value || typeof value !== "object") return value;
-    if (value.light || value.dark) return image(value[globalThis.__commandSpace?.environment?.appearance || "dark"] || value.light || value.dark, fallback);
+    if (value.light || value.dark) return image(value[globalThis.__superSpace?.environment?.appearance || "dark"] || value.light || value.dark, fallback);
     if (value.uri) return remote(value.uri, value.headers) ?? image(value.fallback || fallback || "󰋩");
     if (value.source) {
       const resolved = image(value.source, value.fallback);

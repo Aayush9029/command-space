@@ -1,6 +1,6 @@
 {
-  "name": "command-space-validation",
-  "title": "Command Space Validation",
+  "name": "super-space-validation",
+  "title": "Super Space Validation",
   "commands": [
     {
       "name": "menu",
