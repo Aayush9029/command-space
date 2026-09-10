@@ -114,7 +114,10 @@ elif command=='curl':
     const env = {...process.env, HOME:home, PATH:helpers, TMPDIR:tmp, CS_TEST_ARCH:architecture, CS_TEST_TRANSPORT:transportFile, SUPER_SPACE_BOOTSTRAP_CALLS:callsFile, ...options.env};
     for (const key of ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "BUN_INSTALL"]) delete env[key];
     let error;
-    try { await run("/bin/bash", [installer], {env, timeout:60000}); } catch (value) { error = value; }
+    const invocation = options.piped
+      ? ["-o", "pipefail", "-c", 'cat -- "$1" | /bin/bash', "bootstrap-test", installer]
+      : [installer];
+    try { await run("/bin/bash", invocation, {env, timeout:60000}); } catch (value) { error = value; }
     const calls = await fs.readFile(callsFile, "utf8");
     if (options.error) {
       assert.ok(error, `${label} must reject`);
@@ -135,6 +138,7 @@ elif command=='curl':
   };
 
   await runCase("verified download with existing Bun");
+  await runCase("piped installer with existing Bun", {piped:true});
   await runCase("root refusal", {env:{CS_TEST_UID:"0"}, error:/without sudo/});
   await runCase("macOS refusal", {env:{CS_TEST_OS:"Darwin"}, error:/Omarchy Linux/});
   await runCase("unsupported architecture", {env:{CS_TEST_ARCH:"riscv64"}, error:/Unsupported architecture/});

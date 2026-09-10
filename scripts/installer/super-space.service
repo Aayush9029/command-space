@@ -1,0 +1,14 @@
+[Unit]
+Description=Super Space launcher
+After=graphical-session-pre.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/share/super-space/bin/start-daemon
+Environment=PATH=%h/.bun/bin:%h/.local/bin:%h/.local/share/mise/shims:%h/.cargo/bin:/usr/share/omarchy/bin:/usr/local/bin:/usr/bin
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

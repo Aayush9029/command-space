@@ -68,8 +68,10 @@ try {
   const {stdout} = await run(binary,["--version"],{timeout:10000});
   assert.equal(stdout.trim(),`Super Space ${version}`);
   for (const file of ["scripts/install.sh","scripts/install-linux.sh","scripts/migrate-legacy.py","scripts/start-daemon.sh","runtime/host.mjs","runtime/bun.lock","runtime/invocation.mjs","runtime/storage.mjs","runtime/updater.mjs","runtime/unpack-release.py","runtime/icon-catalog.mjs","runtime/icons/catalog.json","runtime/icons/LICENSE","README.md","LICENSE.md","docs/DEVELOPMENT.md","docs/PORTING.md","docs/assets/banner.png"]) await fs.access(path.join(bundle,file));
+  for (const file of ["transaction.py","desktop-entry.py","super-space-menu","super-space.service","super-space.desktop.in"]) await fs.access(path.join(bundle,"scripts/installer",file));
   await run("bash",["-n",path.join(bundle,"scripts/install-linux.sh")]);
   await run("bash",["-n",path.join(bundle,"scripts/start-daemon.sh")]);
+  await run("sh",["-n",path.join(bundle,"scripts/installer/super-space-menu")]);
   const runtimeManifest = JSON.parse(await fs.readFile(path.join(bundle,"runtime/package.json"),"utf8"));
   for (const [dependency,version] of Object.entries(runtimeManifest.dependencies)) {
     const installed = JSON.parse(await fs.readFile(path.join(bundle,"runtime/node_modules",dependency,"package.json"),"utf8"));

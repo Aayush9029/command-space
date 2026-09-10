@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Super Space
+Comment=Search applications, Omarchy commands, and extensions
+Exec=@HOME@/.local/bin/super-space %u
+Icon=system-search
+Terminal=false
+NoDisplay=true
+Categories=Utility;
+MimeType=x-scheme-handler/super-space;x-scheme-handler/command-space;x-scheme-handler/rustcast;x-scheme-handler/raycast;x-scheme-handler/com.raycast;
+StartupWMClass=super-space

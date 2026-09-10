@@ -14,6 +14,7 @@ mkdir -p "$package/bin" "$package/runtime" "$package/scripts" "$package/extensio
 install -m 755 target/release/super-space "$package/bin/super-space"
 rsync -a --exclude tests --exclude browser-host --exclude browser-extension-firefox runtime/ "$package/runtime/"
 install -m 755 scripts/install.sh scripts/install-linux.sh scripts/migrate-legacy.py scripts/start-daemon.sh "$package/scripts/"
+rsync -a --exclude __pycache__ scripts/installer/ "$package/scripts/installer/"
 rsync -a --exclude node_modules --exclude .git extensions/ "$package/extensions/"
 cp README.md LICENSE.md "$package/"
 cp docs/DEVELOPMENT.md docs/PORTING.md "$package/docs/"

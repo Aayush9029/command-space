@@ -221,6 +221,15 @@ try {
     await assert.rejects(run("/bin/bash",[installer,"--prebuilt"],{env:environment,timeout:10000}),expression);
     assert.deepEqual(await snapshot(),unchanged);
   };
+  for (const name of ["transaction.py", "desktop-entry.py", "super-space-menu", "super-space.service", "super-space.desktop.in"]) {
+    const file = path.join(bundle, "scripts/installer", name);
+    await fs.rename(file, `${file}.missing`);
+    try {
+      await rejectsWithoutChanges(/The package is incomplete: missing scripts\/installer\//);
+    } finally {
+      await fs.rename(`${file}.missing`, file);
+    }
+  }
   await fs.unlink(bun);
   await rejectsWithoutChanges(/Missing required command: bun/);
   await fs.writeFile(bun,'#!/bin/sh\nprintf "1.3.0\\n"\n',{mode:0o755});
@@ -229,7 +238,7 @@ try {
   await fs.symlink(process.execPath,bun);
   await fs.unlink(path.join(helpers,"rsync"));
   await rejectsWithoutChanges(/Missing required command: rsync/);
-  console.log("Verified real prebuilt installer with restricted SSH PATH, Bun home discovery, shortcut/bar replacement, original backups, repeated install data preservation, native browser integration, bundled updates, transactional rollback including legacy migration, legacy data and source marker preservation, conflict rejection, unsupported XDG rejection, and three preflight failures without modifying existing files");
+  console.log("Verified real prebuilt installer with restricted SSH PATH, Bun home discovery, shortcut/bar replacement, original backups, repeated install data preservation, native browser integration, bundled updates, transactional rollback including legacy migration, legacy data and source marker preservation, conflict rejection, unsupported XDG rejection, and missing helper and dependency failures without modifying existing files");
 } finally {
   if (server.listening) await new Promise(resolve => server.close(resolve));
   await fs.rm(temporary,{recursive:true,force:true});

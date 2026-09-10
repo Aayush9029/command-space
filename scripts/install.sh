@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+readonly repository=Aayush9029/super-space
+readonly bun_release=1.4.2
+# SHA-256 of the official Bun release archives, pinned with bun_release.
+readonly bun_aarch64_sha256=54328bbc2d9c8e0c9f892c544d66c57a83b84139e34909e5ee81758f1ac8fda7
+readonly bun_x86_64_sha256=c678040f14fe0440eb839d37cbd0ce4c051a32da72806ac97de6a6aab6bf728f
+staging=
+bun_staging=
+
 fail() {
   printf 'Super Space: %s\n' "$*" >&2
   exit 1
@@ -12,25 +20,23 @@ download() {
     --output "$2" "$1"
 }
 
-main() {
-  [[ $# == 0 ]] || fail 'This installer does not accept arguments.'
+check_environment() {
   [[ $(uname -s) == Linux ]] || fail 'Run this installer on your Omarchy Linux desktop.'
   [[ $(id -u) != 0 ]] || fail 'Run as your desktop user, without sudo.'
-  local arch bun_asset bun_digest session staging version archive package_url checksum_url bun_version need_bun
+  local session setting expected dependency
   arch=$(uname -m)
   case "$arch" in
     aarch64)
       bun_asset=bun-linux-aarch64
-      bun_digest=54328bbc2d9c8e0c9f892c544d66c57a83b84139e34909e5ee81758f1ac8fda7
+      bun_digest=$bun_aarch64_sha256
       ;;
     x86_64)
       bun_asset=bun-linux-x64-baseline
-      bun_digest=c678040f14fe0440eb839d37cbd0ce4c051a32da72806ac97de6a6aab6bf728f
+      bun_digest=$bun_x86_64_sha256
       ;;
     *) fail "Unsupported architecture: $arch." ;;
   esac
   [[ -f "$HOME/.config/hypr/hyprland.lua" ]] || fail "Omarchy's Hyprland Lua configuration was not found."
-  local setting expected dependency
   for setting in XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME; do
     case "$setting" in
       XDG_CONFIG_HOME) expected="$HOME/.config" ;;
@@ -46,12 +52,90 @@ main() {
   session=$(systemctl --user show-environment) || fail 'The systemd user session is unavailable.'
   [[ "$session" == *WAYLAND_DISPLAY=* || "$session" == *HYPRLAND_INSTANCE_SIGNATURE=* ]] || fail 'Run this installer from your active Omarchy desktop session.'
   export PATH="$HOME/.bun/bin:${PATH:-/usr/local/bin:/usr/bin:/bin}"
+}
+
+cleanup() {
+  [[ -z "$staging" ]] || rm -rf -- "$staging"
+  [[ -z "$bun_staging" ]] || rm -f -- "$bun_staging"
+}
+
+prepare_staging() {
   umask 077
   staging=$(mktemp -d)
-  super_space_staging=$staging
-  super_space_bun_staging=
-  trap 'rm -rf -- "$super_space_staging"; [[ -z "$super_space_bun_staging" ]] || rm -f -- "$super_space_bun_staging"' EXIT
-  cat > "$staging/verify.py" <<'PY'
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+}
+
+download_release() {
+  printf 'Finding the latest Super Space release...\n'
+  download "https://api.github.com/repos/$repository/releases/latest" "$staging/release.json" 1048576
+  verify_download release "$staging/release.json" "$arch" > "$staging/release-plan"
+  { read -r version; read -r archive; read -r package_url; read -r checksum_url; } < "$staging/release-plan"
+  printf 'Downloading Super Space %s...\n' "$version"
+  download "$package_url" "$staging/$archive" 134217728
+  download "$checksum_url" "$staging/checksum" 4096
+  verify_download package "$staging/$archive" "$staging/checksum" "$archive" "$staging/unpacked" "$arch"
+}
+
+bun_is_compatible() {
+  local version
+  command -v bun >/dev/null 2>&1 || return 1
+  version=$(bun --version 2>/dev/null) || return 1
+  [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || return 1
+  local major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]} patch=${BASH_REMATCH[3]}
+  (( major > 1 || (major == 1 && minor > 4) || (major == 1 && minor == 4 && patch >= 2) ))
+}
+
+download_bun() {
+  printf 'Downloading Bun %s...\n' "$bun_release"
+  download "https://github.com/oven-sh/bun/releases/download/bun-v$bun_release/$bun_asset.zip" "$staging/bun.zip" 134217728
+  verify_download bun "$staging/bun.zip" "$bun_digest" "$bun_asset" "$staging/bun"
+  [[ $("$staging/bun" --version) == "$bun_release" ]] || fail 'The downloaded Bun executable cannot run on this system.'
+}
+
+install_system_packages() {
+  local packages=() package
+  for package in rsync util-linux desktop-file-utils wayland libxkbcommon openssl; do
+    pacman -Q "$package" >/dev/null 2>&1 || packages+=("$package")
+  done
+  if (( ${#packages[@]} )); then
+    command -v sudo >/dev/null 2>&1 || fail 'sudo is required to install missing runtime packages.'
+    ( : < /dev/tty ) 2>/dev/null || fail "Install these packages with pacman and retry: ${packages[*]}"
+    printf 'Installing required packages: %s\n' "${packages[*]}"
+    sudo pacman -S --needed --noconfirm "${packages[@]}" < /dev/tty
+  fi
+}
+
+install_bun() {
+  mkdir -p "$HOME/.bun/bin"
+  bun_staging=$(mktemp "$HOME/.bun/bin/.super-space-bun.XXXXXX")
+  install -m 755 "$staging/bun" "$bun_staging"
+  mv -f "$bun_staging" "$HOME/.bun/bin/bun"
+  bun_staging=
+}
+
+main() {
+  [[ $# == 0 ]] || fail 'This installer does not accept arguments.'
+  local arch bun_asset bun_digest version archive package_url checksum_url
+  check_environment
+  prepare_staging
+  download_release
+  if ! bun_is_compatible; then
+    download_bun
+  fi
+  install_system_packages
+  [[ $("$staging/unpacked/super-space/bin/super-space" --version) == "Super Space $version" ]] || fail 'The package executable does not match the release version or cannot run on this system.'
+  if [[ -f "$staging/bun" ]]; then
+    install_bun
+  fi
+  printf 'Installing Super Space...\n'
+  bash "$staging/unpacked/super-space/scripts/install-linux.sh" --prebuilt
+}
+
+# Keep verification inline so curl | bash needs no separately downloaded code.
+verify_download() {
+  python3 - "$repository" "$@" <<'PY'
 import hashlib
 import json
 import pathlib
@@ -89,7 +173,7 @@ def release_plan(metadata, arch):
     urls = []
     for asset_name in (name, name + ".sha256"):
         matches = [asset for asset in release.get("assets", []) if asset.get("name") == asset_name]
-        expected = f"https://github.com/Aayush9029/super-space/releases/download/{tag}/{asset_name}"
+        expected = f"https://github.com/{repository}/releases/download/{tag}/{asset_name}"
         if len(matches) != 1 or matches[0].get("browser_download_url") != expected:
             raise ValueError(f"Missing or invalid release asset: {asset_name}")
         urls.append(expected)
@@ -151,52 +235,11 @@ def unpack_bun(archive, digest, root, destination):
 
 
 try:
-    {"release": release_plan, "package": unpack_package, "bun": unpack_bun}[sys.argv[1]](*sys.argv[2:])
+    repository, operation, *arguments = sys.argv[1:]
+    {"release": release_plan, "package": unpack_package, "bun": unpack_bun}[operation](*arguments)
 except (ValueError, OSError, KeyError, tarfile.TarError, zipfile.BadZipFile) as error:
     sys.exit(f"Super Space: {error}")
 PY
-  printf 'Finding the latest Super Space release...\n'
-  download 'https://api.github.com/repos/Aayush9029/super-space/releases/latest' "$staging/release.json" 1048576
-  python3 "$staging/verify.py" release "$staging/release.json" "$arch" > "$staging/release-plan"
-  { read -r version; read -r archive; read -r package_url; read -r checksum_url; } < "$staging/release-plan"
-  printf 'Downloading Super Space %s...\n' "$version"
-  download "$package_url" "$staging/$archive" 134217728
-  download "$checksum_url" "$staging/checksum" 4096
-  python3 "$staging/verify.py" package "$staging/$archive" "$staging/checksum" "$archive" "$staging/unpacked" "$arch"
-  need_bun=true
-  if command -v bun >/dev/null 2>&1; then
-    bun_version=$(bun --version 2>/dev/null || true)
-    if [[ "$bun_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] && \
-      (( BASH_REMATCH[1] > 1 || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] > 4) || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] == 4 && BASH_REMATCH[3] >= 2) )); then
-      need_bun=false
-    fi
-  fi
-  if [[ "$need_bun" == true ]]; then
-    printf 'Downloading Bun 1.4.2...\n'
-    download "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/$bun_asset.zip" "$staging/bun.zip" 134217728
-    python3 "$staging/verify.py" bun "$staging/bun.zip" "$bun_digest" "$bun_asset" "$staging/bun"
-    [[ $("$staging/bun" --version) == 1.4.2 ]] || fail 'The downloaded Bun executable cannot run on this system.'
-  fi
-  local packages=() package
-  for package in rsync util-linux desktop-file-utils wayland libxkbcommon openssl; do
-    pacman -Q "$package" >/dev/null 2>&1 || packages+=("$package")
-  done
-  if (( ${#packages[@]} )); then
-    command -v sudo >/dev/null 2>&1 || fail 'sudo is required to install missing runtime packages.'
-    ( : < /dev/tty ) 2>/dev/null || fail "Install these packages with pacman and retry: ${packages[*]}"
-    printf 'Installing required packages: %s\n' "${packages[*]}"
-    sudo pacman -S --needed --noconfirm "${packages[@]}" < /dev/tty
-  fi
-  [[ $("$staging/unpacked/super-space/bin/super-space" --version) == "Super Space $version" ]] || fail 'The package executable does not match the release version or cannot run on this system.'
-  if [[ "$need_bun" == true ]]; then
-    mkdir -p "$HOME/.bun/bin"
-    super_space_bun_staging=$(mktemp "$HOME/.bun/bin/.super-space-bun.XXXXXX")
-    install -m 755 "$staging/bun" "$super_space_bun_staging"
-    mv -f "$super_space_bun_staging" "$HOME/.bun/bin/bun"
-    super_space_bun_staging=
-  fi
-  printf 'Installing Super Space...\n'
-  bash "$staging/unpacked/super-space/scripts/install-linux.sh" --prebuilt
 }
 
 main "$@"
