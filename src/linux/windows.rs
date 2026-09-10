@@ -293,6 +293,28 @@ pub fn place(selector: &str, rect: Rect) -> Result<(), String> {
     ))
 }
 
+fn launcher_target(windows: &Value, pid: u32) -> Result<String, String> {
+    let launcher = windows
+        .as_array()
+        .and_then(|windows| {
+            windows.iter().rev().find(|window| {
+                window["mapped"] == true
+                    && window["class"] == "command-space"
+                    && window["pid"] == pid
+            })
+        })
+        .and_then(|window| window["stableId"].as_str())
+        .ok_or("Launcher window is unavailable")?;
+    selector(launcher)
+}
+
+pub fn raise_launcher() -> Result<(), String> {
+    let target = launcher_target(&query("clients")?, std::process::id())?;
+    eval(&format!(
+        "hl.dispatch(hl.dsp.window.alter_zorder({{window={target:?},mode='top'}}))"
+    ))
+}
+
 fn workspace_selector(workspace: &Workspace) -> String {
     if workspace.id < 0 || workspace.name.parse::<i64>().is_ok() {
         workspace.name.clone()
@@ -716,6 +738,19 @@ pub fn paste() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn launcher_raise_targets_only_the_current_process_mapped_launcher() {
+        let windows = serde_json::json!([
+            {"mapped":true,"class":"command-space","pid":12,"stableId":"abc1"},
+            {"mapped":true,"class":"command-space","pid":12,"stableId":"abc2"},
+            {"mapped":true,"class":"command-space","pid":34,"stableId":"abc3"},
+            {"mapped":true,"class":"terminal","pid":12,"stableId":"abc4"},
+            {"mapped":false,"class":"command-space","pid":12,"stableId":"abc5"}
+        ]);
+        assert_eq!(launcher_target(&windows, 12).unwrap(), "stableid:abc2");
+        assert!(launcher_target(&windows, 56).is_err());
+        assert!(launcher_target(&Value::Null, 12).is_err());
+    }
     #[test]
     fn monitor_scale_rotation_and_reserved_space() {
         let monitor = serde_json::json!({"width":2160,"height":3840,"scale":2,"transform":1,"x":-1920,"y":0,"reserved":[0,30,0,10]});

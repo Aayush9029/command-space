@@ -27,7 +27,7 @@ Command Space uses an opaque charcoal interface with Adwaita Sans, compact searc
 - Browser tabs and page content through the included Chromium/Firefox bridge.
 - Linux release checks, checksum-verified updates, and rollback after installation failures.
 
-The port is under active development. [PORTING.md](docs/PORTING.md) records verified behavior and remaining compatibility work. Extension compatibility depends on the APIs and external programs each extension uses. macOS frameworks and AppleScript are outside the Linux host’s scope.
+[PORTING.md](docs/PORTING.md) records verified behavior and compatibility scope. Extension compatibility depends on the APIs and external programs each extension uses. macOS frameworks and AppleScript are outside the Linux host’s scope.
 
 ## Install on Omarchy
 
@@ -65,7 +65,7 @@ Run a menu-bar command once to enable it. Its tray item continues working after 
 
 Search for Check for Command Space Updates or use Settings → About. The launcher checks daily when enabled. Available updates offer release notes and installation; downloads are checked against the release checksum and architecture before replacing the installed files. Failed installations restore the previous binary and runtime.
 
-The Linux release workflow builds ARM64 and x86-64 packages. No Linux release has been published yet. Local packages can be built with `bash scripts/package-linux.sh`; an extracted package installs with `bash scripts/install-linux.sh --prebuilt`.
+The [Linux releases](https://github.com/Aayush9029/command-space/releases) provide ARM64 and x86-64 packages built and checked by the release workflow. Local packages can be built with `bash scripts/package-linux.sh`; an extracted package installs with `bash scripts/install-linux.sh --prebuilt`.
 
 ## Development
 

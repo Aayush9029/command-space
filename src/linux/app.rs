@@ -430,7 +430,7 @@ impl Launcher {
         self.rebuild();
         if let Some(id) = self.window {
             return Task::batch([
-                window::gain_focus(id),
+                Self::focus_launcher(id),
                 widget::operation::focus("search"),
                 self.load_dynamic(),
             ]);
@@ -439,9 +439,20 @@ impl Launcher {
         self.present()
     }
 
+    fn focus_launcher(id: window::Id) -> Task<Message> {
+        window::gain_focus(id).chain(Task::perform(
+            async {
+                tokio::task::spawn_blocking(windows::raise_launcher)
+                    .await
+                    .map_err(|error| error.to_string())?
+            },
+            Message::Result,
+        ))
+    }
+
     fn present(&mut self) -> Task<Message> {
         if let Some(id) = self.window {
-            return window::gain_focus(id);
+            return Self::focus_launcher(id);
         }
         let rect = self.context.launcher_rect(&self.config);
         let (id, open) = window::open(window::Settings {
@@ -609,6 +620,7 @@ impl Launcher {
                             tokio::time::sleep(std::time::Duration::from_millis(80)).await;
                             tokio::task::spawn_blocking(move || {
                                 windows::place("class:^command-space$", rect)
+                                    .and_then(|_| windows::raise_launcher())
                             })
                             .await
                             .map_err(|e| e.to_string())?

@@ -52,4 +52,4 @@ For destructive clipboard UI checks, `python3 scripts/verify-clipboard-clear.py 
 
 `cargo test --release --locked aur_catalog_search_profile -- --ignored --nocapture` measures search against the guest’s installed AUR catalog. It requires the full catalog and excludes provider loading from its query timings.
 
-Both hosted CI architectures passed at commit `c06d78e` in [run 34421177603](https://github.com/Aayush9029/command-space/actions/runs/34421177603). Later changes require a fresh run. Native test results and remaining release checks are tracked in [PORTING.md](PORTING.md).
+Both hosted CI architectures and package builds passed at `edc243c`. The release workflow repeats the full checks for each tagged revision. Native test results and release validation are tracked in [PORTING.md](PORTING.md).
