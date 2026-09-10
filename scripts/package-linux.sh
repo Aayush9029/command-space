@@ -14,7 +14,7 @@ mkdir -p "$package/bin" "$package/runtime" "$package/scripts" "$package/extensio
 install -m 755 target/release/command-space "$package/bin/command-space"
 rsync -a --exclude tests --exclude browser-host --exclude browser-extension-firefox runtime/ "$package/runtime/"
 cp scripts/compat/v1.0.1-package-lock.json "$package/runtime/package-lock.json"
-install -m 755 scripts/install-linux.sh scripts/start-daemon.sh "$package/scripts/"
+install -m 755 scripts/install.sh scripts/install-linux.sh scripts/start-daemon.sh "$package/scripts/"
 rsync -a --exclude node_modules --exclude .git extensions/ "$package/extensions/"
 cp README.md LICENSE.md "$package/"
 cp docs/DEVELOPMENT.md docs/PORTING.md "$package/docs/"
@@ -24,4 +24,5 @@ tar --format=ustar --dereference --hard-dereference -czf "dist/$archive" -C "$st
 (cd dist && sha256sum "$archive" > "$archive.sha256")
 bun scripts/verify-linux-package.mjs "dist/$archive"
 bun scripts/verify-installer.mjs "dist/$archive"
+bun scripts/verify-bootstrap.mjs "dist/$archive"
 printf 'Created dist/%s\n' "$archive"

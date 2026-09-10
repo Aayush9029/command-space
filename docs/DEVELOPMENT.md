@@ -16,6 +16,10 @@ From a Mac, prefix each command with `scripts/dev.sh` to sync and run it over SS
 
 ## Install
 
+For a prebuilt install on Omarchy, use the one-liner in the [README](../README.md). It verifies the release download, installs missing dependencies, and configures the launcher. Run it as your desktop user with the standard Omarchy XDG directories. Missing system packages may require sudo; Bun is installed in `~/.bun/bin`. Dependency installs remain if application setup fails, while launcher files and integration are restored.
+
+To build and install from this checkout:
+
 ```sh
 bash scripts/install-linux.sh
 ```
@@ -30,6 +34,6 @@ The installer builds a release binary, replaces Omarchy's launcher bindings, and
 bash scripts/package-linux.sh
 ```
 
-Archives and checksums go in `dist/`. Packaging checks the executable, bundled extensions, and installer in disposable homes. The scripts named `verify-*` cover individual integrations; desktop checks can open windows or change the clipboard.
+Archives and checksums go in `dist/`. Packaging checks the executable, bundled extensions, installer rollback, and download bootstrap in disposable homes. The scripts named `verify-*` cover individual integrations; desktop checks can open windows or change the clipboard.
 
 The Linux entry point is `src/linux/main.rs`. Extension runtime code lives in `runtime/`; bundled commands live in `extensions/`.

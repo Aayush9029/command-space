@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fail() {
+  printf 'Command Space: %s\n' "$*" >&2
+  exit 1
+}
+
+download() {
+  curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
+    --tlsv1.2 --connect-timeout 20 --max-time 300 --retry 2 --max-filesize "$3" \
+    --output "$2" "$1"
+}
+
+main() {
+  [[ $# == 0 ]] || fail 'This installer does not accept arguments.'
+  [[ $(uname -s) == Linux ]] || fail 'Run this installer on your Omarchy Linux desktop.'
+  [[ $(id -u) != 0 ]] || fail 'Run as your desktop user, without sudo.'
+  local arch bun_asset bun_digest session staging version archive package_url checksum_url bun_version need_bun
+  arch=$(uname -m)
+  case "$arch" in
+    aarch64)
+      bun_asset=bun-linux-aarch64
+      bun_digest=54328bbc2d9c8e0c9f892c544d66c57a83b84139e34909e5ee81758f1ac8fda7
+      ;;
+    x86_64)
+      bun_asset=bun-linux-x64-baseline
+      bun_digest=c678040f14fe0440eb839d37cbd0ce4c051a32da72806ac97de6a6aab6bf728f
+      ;;
+    *) fail "Unsupported architecture: $arch." ;;
+  esac
+  [[ -f "$HOME/.config/hypr/hyprland.lua" ]] || fail "Omarchy's Hyprland Lua configuration was not found."
+  local setting expected dependency
+  for setting in XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME; do
+    case "$setting" in
+      XDG_CONFIG_HOME) expected="$HOME/.config" ;;
+      XDG_DATA_HOME) expected="$HOME/.local/share" ;;
+      XDG_STATE_HOME) expected="$HOME/.local/state" ;;
+    esac
+    [[ -z "${!setting:-}" || "${!setting}" == "$expected" ]] || fail "$setting must use $expected for Omarchy desktop integration."
+  done
+  for dependency in curl python3 pacman systemctl mktemp; do
+    command -v "$dependency" >/dev/null 2>&1 || fail "Missing $dependency. Install it with pacman and retry (Python uses the python package)."
+  done
+  python3 -c 'import sys; sys.exit(sys.version_info < (3, 12))' || fail 'Python 3.12 or newer is required.'
+  session=$(systemctl --user show-environment) || fail 'The systemd user session is unavailable.'
+  [[ "$session" == *WAYLAND_DISPLAY=* || "$session" == *HYPRLAND_INSTANCE_SIGNATURE=* ]] || fail 'Run this installer from your active Omarchy desktop session.'
+  export PATH="$HOME/.bun/bin:${PATH:-/usr/local/bin:/usr/bin:/bin}"
+  umask 077
+  staging=$(mktemp -d)
+  command_space_staging=$staging
+  command_space_bun_staging=
+  trap 'rm -rf -- "$command_space_staging"; [[ -z "$command_space_bun_staging" ]] || rm -f -- "$command_space_bun_staging"' EXIT
+  cat > "$staging/verify.py" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import shutil
+import stat
+import sys
+import tarfile
+import zipfile
+
+
+def digest_matches(path, expected):
+    with open(path, "rb") as source:
+        actual = hashlib.file_digest(source, "sha256").hexdigest()
+    if actual != expected:
+        raise ValueError("Download checksum does not match")
+
+
+def safe_path(name, root):
+    path = pathlib.PurePosixPath(name)
+    if not name or "\\" in name or path.is_absolute() or ".." in path.parts or not path.parts or path.parts[0] != root:
+        raise ValueError("Archive contains an invalid path")
+    return path
+
+
+def release_plan(metadata, arch):
+    with open(metadata, encoding="utf-8") as source:
+        release = json.load(source)
+    tag = release.get("tag_name", "")
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag) or tuple(map(int, tag[1:].split("."))) < (1, 0, 2):
+        raise ValueError("A Bun-compatible Command Space release (1.0.2 or newer) is not available yet")
+    if release.get("draft") or release.get("prerelease"):
+        raise ValueError("Expected a stable published release")
+    name = f"command-space-{tag[1:]}-linux-{arch}.tar.gz"
+    urls = []
+    for asset_name in (name, name + ".sha256"):
+        matches = [asset for asset in release.get("assets", []) if asset.get("name") == asset_name]
+        expected = f"https://github.com/Aayush9029/command-space/releases/download/{tag}/{asset_name}"
+        if len(matches) != 1 or matches[0].get("browser_download_url") != expected:
+            raise ValueError(f"Missing or invalid release asset: {asset_name}")
+        urls.append(expected)
+    print(tag[1:])
+    print(name)
+    print("\n".join(urls))
+
+
+def unpack_package(archive, checksum, name, destination, arch):
+    checksum_text = pathlib.Path(checksum).read_text(encoding="ascii")
+    match = re.fullmatch(r"([a-fA-F0-9]{64})[ \t]+\*?" + re.escape(name) + r"\r?\n?", checksum_text)
+    if not match:
+        raise ValueError("Invalid release checksum file")
+    digest_matches(archive, match[1].lower())
+    with tarfile.open(archive, "r:gz") as bundle:
+        members, paths, total = [], set(), 0
+        for member in bundle:
+            path = safe_path(member.name, "command-space")
+            if path in paths or not (member.isfile() or member.isdir()):
+                raise ValueError("Archive contains duplicate paths, links, or special files")
+            paths.add(path)
+            total += member.size
+            if member.size < 0 or member.size > 128 * 1024 * 1024 or total > 512 * 1024 * 1024 or len(members) >= 10000:
+                raise ValueError("Archive exceeds extraction limits")
+            member.mode = 0o755 if member.isdir() or member.mode & 0o111 else 0o644
+            members.append(member)
+        required = ("scripts/install-linux.sh", "bin/command-space", "runtime/bun.lock", "runtime/host.mjs")
+        for relative in required:
+            if not any(member.name.rstrip("/") == f"command-space/{relative}" and member.isfile() for member in members):
+                raise ValueError(f"Package is incomplete: missing {relative}")
+        executable = next(member for member in members if member.name == "command-space/bin/command-space")
+        with bundle.extractfile(executable) as source:
+            header = source.read(20)
+        machine = {"x86_64": 62, "aarch64": 183}[arch]
+        if len(header) < 20 or header[:6] != b"\x7fELF\x02\x01" or int.from_bytes(header[18:20], "little") != machine or not executable.mode & 0o111:
+            raise ValueError("Package executable does not match the Linux architecture")
+        bundle.extractall(destination, members=members, filter="data")
+
+
+def unpack_bun(archive, digest, root, destination):
+    digest_matches(archive, digest)
+    with zipfile.ZipFile(archive) as bundle:
+        entries = bundle.infolist()
+        if len(entries) > 50 or sum(entry.file_size for entry in entries) > 256 * 1024 * 1024:
+            raise ValueError("Bun archive exceeds extraction limits")
+        paths = set()
+        for entry in entries:
+            path = safe_path(entry.filename, root)
+            kind = stat.S_IFMT(entry.external_attr >> 16)
+            if path in paths or kind not in (0, stat.S_IFREG, stat.S_IFDIR) or entry.file_size > 128 * 1024 * 1024:
+                raise ValueError("Bun archive contains invalid entries")
+            paths.add(path)
+        binary = bundle.getinfo(f"{root}/bun")
+        if binary.is_dir() or binary.file_size == 0:
+            raise ValueError("Bun executable is missing")
+        with bundle.open(binary) as source, open(destination, "xb") as target:
+            shutil.copyfileobj(source, target)
+        pathlib.Path(destination).chmod(0o755)
+
+
+try:
+    {"release": release_plan, "package": unpack_package, "bun": unpack_bun}[sys.argv[1]](*sys.argv[2:])
+except (ValueError, OSError, KeyError, tarfile.TarError, zipfile.BadZipFile) as error:
+    sys.exit(f"Command Space: {error}")
+PY
+  printf 'Finding the latest Command Space release...\n'
+  download 'https://api.github.com/repos/Aayush9029/command-space/releases/latest' "$staging/release.json" 1048576
+  python3 "$staging/verify.py" release "$staging/release.json" "$arch" > "$staging/release-plan"
+  { read -r version; read -r archive; read -r package_url; read -r checksum_url; } < "$staging/release-plan"
+  printf 'Downloading Command Space %s...\n' "$version"
+  download "$package_url" "$staging/$archive" 134217728
+  download "$checksum_url" "$staging/checksum" 4096
+  python3 "$staging/verify.py" package "$staging/$archive" "$staging/checksum" "$archive" "$staging/unpacked" "$arch"
+  need_bun=true
+  if command -v bun >/dev/null 2>&1; then
+    bun_version=$(bun --version 2>/dev/null || true)
+    if [[ "$bun_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] && \
+      (( BASH_REMATCH[1] > 1 || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] > 4) || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] == 4 && BASH_REMATCH[3] >= 2) )); then
+      need_bun=false
+    fi
+  fi
+  if [[ "$need_bun" == true ]]; then
+    printf 'Downloading Bun 1.4.2...\n'
+    download "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/$bun_asset.zip" "$staging/bun.zip" 134217728
+    python3 "$staging/verify.py" bun "$staging/bun.zip" "$bun_digest" "$bun_asset" "$staging/bun"
+    [[ $("$staging/bun" --version) == 1.4.2 ]] || fail 'The downloaded Bun executable cannot run on this system.'
+  fi
+  local packages=() package
+  for package in rsync util-linux desktop-file-utils wayland libxkbcommon openssl; do
+    pacman -Q "$package" >/dev/null 2>&1 || packages+=("$package")
+  done
+  if (( ${#packages[@]} )); then
+    command -v sudo >/dev/null 2>&1 || fail 'sudo is required to install missing runtime packages.'
+    ( : < /dev/tty ) 2>/dev/null || fail "Install these packages with pacman and retry: ${packages[*]}"
+    printf 'Installing required packages: %s\n' "${packages[*]}"
+    sudo pacman -S --needed --noconfirm "${packages[@]}" < /dev/tty
+  fi
+  [[ $("$staging/unpacked/command-space/bin/command-space" --version) == "Command Space $version" ]] || fail 'The package executable does not match the release version or cannot run on this system.'
+  if [[ "$need_bun" == true ]]; then
+    mkdir -p "$HOME/.bun/bin"
+    command_space_bun_staging=$(mktemp "$HOME/.bun/bin/.command-space-bun.XXXXXX")
+    install -m 755 "$staging/bun" "$command_space_bun_staging"
+    mv -f "$command_space_bun_staging" "$HOME/.bun/bin/bun"
+    command_space_bun_staging=
+  fi
+  printf 'Installing Command Space...\n'
+  bash "$staging/unpacked/command-space/scripts/install-linux.sh" --prebuilt
+}
+
+main "$@"
