@@ -8,6 +8,7 @@ import {createHash} from "node:crypto";
 import {execFile} from "node:child_process";
 import {promisify} from "node:util";
 
+assert.ok(process.versions.bun,"Run this validator with Bun");
 const run = promisify(execFile);
 const temporary = await fs.mkdtemp(path.join(os.tmpdir(),"cs-installer-"));
 const fixtureHome = path.join(temporary,"home");
@@ -42,12 +43,12 @@ try {
     const {stdout} = await run("/bin/sh",["-c",'command -v "$1"',"installer-test",command]);
     await fs.symlink(stdout.trim(),path.join(helpers,command));
   }
-  for (const command of ["npm","systemctl","systemd-run","update-desktop-database"]) {
+  for (const command of ["systemctl","systemd-run","update-desktop-database"]) {
     await fs.writeFile(path.join(helpers,command),'#!/bin/sh\nprintf "%s %s\\n" "${0##*/}" "$*" >> "$COMMAND_SPACE_TEST_CALLS"\n',{mode:0o755});
   }
-  const node = path.join(fixtureHome,".local/share/mise/shims/node");
-  await fs.mkdir(path.dirname(node),{recursive:true});
-  await fs.symlink(process.execPath,node);
+  const bun = path.join(fixtureHome,".bun/bin/bun");
+  await fs.mkdir(path.dirname(bun),{recursive:true});
+  await fs.symlink(process.execPath,bun);
   await fs.mkdir(path.join(fixtureHome,".config/hypr"),{recursive:true});
   await fs.writeFile(path.join(fixtureHome,".config/hypr/hyprland.lua"),"");
   await fs.mkdir(path.join(fixtureHome,".config/omarchy"),{recursive:true});
@@ -78,15 +79,15 @@ try {
     await assert.rejects(run("/bin/bash",[installer,"--prebuilt"],{env:environment,timeout:10000}),expression);
     assert.deepEqual(await snapshot(),unchanged);
   };
-  await fs.unlink(node);
-  await rejectsWithoutChanges(/Missing required command: node/);
-  await fs.writeFile(node,'#!/bin/sh\nprintf "v22.0.0\\n"\n',{mode:0o755});
-  await rejectsWithoutChanges(/Node.js 24 or newer is required; found v22.0.0/);
-  await fs.unlink(node);
-  await fs.symlink(process.execPath,node);
+  await fs.unlink(bun);
+  await rejectsWithoutChanges(/Missing required command: bun/);
+  await fs.writeFile(bun,'#!/bin/sh\nprintf "1.3.0\\n"\n',{mode:0o755});
+  await rejectsWithoutChanges(/Bun 1.4.2 or newer is required; found 1.3.0/);
+  await fs.unlink(bun);
+  await fs.symlink(process.execPath,bun);
   await fs.unlink(path.join(helpers,"rsync"));
   await rejectsWithoutChanges(/Missing required command: rsync/);
-  console.log("Verified real prebuilt installer with restricted SSH PATH, mise-only Node discovery, native desktop/browser integration, bundled updates, and three preflight failures without modifying existing files");
+  console.log("Verified real prebuilt installer with restricted SSH PATH, Bun home discovery, native desktop/browser integration, bundled updates, and three preflight failures without modifying existing files");
 } finally {
   if (server.listening) await new Promise(resolve => server.close(resolve));
   await fs.rm(temporary,{recursive:true,force:true});

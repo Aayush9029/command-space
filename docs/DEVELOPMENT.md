@@ -1,12 +1,12 @@
 # Developing Command Space on Omarchy
 
-The Mac checkout is `/Users/yush/Developer/command-space`. The GitHub fork is [Aayush9029/command-space](https://github.com/Aayush9029/command-space), with [MystikoLab/rustcast](https://github.com/MystikoLab/rustcast) retained as `upstream`.
+The Mac checkout is `/Users/yush/Developer/command-space`. The repository is [Aayush9029/command-space](https://github.com/Aayush9029/command-space).
 
 Run `ssh omarchy` or `ssh command-space-vm` from the Mac. Both use `omarchy@127.0.0.1:2222`, a dedicated Ed25519 key in `~/.ssh/id_ed25519_command_space`, strict host-key checking, and a reusable SSH connection. The guest SSH service starts at boot. A full shutdown and launch through Try Omarchy on 2026-09-09 verified that key authentication and the saved port forward survive a cold boot. Try Omarchy saves a TCP forward from Mac port 2222 to guest port 22, bound to localhost.
 
 The verified guest Ed25519 host-key fingerprint is `SHA256:xZl3wrpbhbvDFOyzrtG3xEK2nM9vfvnBHjhWTH/+69M`. Verify a changed host key through the VM console before updating known hosts. Credentials and private keys do not belong in the repository.
 
-Try Omarchy currently shares `/Users/yush/Developer/omarchy` as `/home/omarchy/omarchy` through `/mnt/mac`. Build artifacts use the guest’s native filesystem at `/home/omarchy/Developer/command-space/target` for fast metadata operations. `scripts/dev.sh` synchronizes source changes through SSH and runs a command there, with Rust and mise on PATH.
+Try Omarchy currently shares `/Users/yush/Developer/omarchy` as `/home/omarchy/omarchy` through `/mnt/mac`. Build artifacts use the guest’s native filesystem at `/home/omarchy/Developer/command-space/target` for fast metadata operations. `scripts/dev.sh` synchronizes source changes through SSH and runs a command there, with Bun, Rust, and mise on PATH.
 
 ```
 scripts/dev.sh cargo build --bin command-space
@@ -20,9 +20,9 @@ Development commands run through SSH. UI validation uses the visible Try Omarchy
 
 For click testing when Try Omarchy's QEMU window is unavailable to macOS accessibility tools, run `scripts/vm-viewer.py --qmp <current-qmp-socket>`. It serves a loopback-only, capability-protected view of the real guest desktop. Frames come from `grim` over SSH; keyboard and pointer input goes to QEMU. Open the printed address with Safari MCP. The viewer captures on input and on Refresh view instead of continuously. Avoid click tests during a build.
 
-The guest development dependencies include `base-devel`, `pkgconf`, `rsync`, `cmake`, `wayland`, `libxkbcommon`, `libxkbcommon-x11`, `openssl`, `wtype`, `zenity`, and `util-linux`, plus Rust, Node.js 24 or newer, npm, and Python 3.12 or newer. The updater uses `flock` from `util-linux` to serialize installations. The installer discovers mise, user, and Rust executables before checking dependencies, the user service manager, and Omarchy configuration; failed preflight leaves the installation unchanged. The systemd user environment already contains the session's Wayland and D-Bus variables.
+The guest development dependencies include `base-devel`, `pkgconf`, `rsync`, `cmake`, `wayland`, `libxkbcommon`, `libxkbcommon-x11`, `openssl`, `wtype`, `zenity`, and `util-linux`, plus Rust, Bun 1.4.2 or newer, and Python 3.12 or newer. The updater uses `flock` from `util-linux` to serialize installations. The installer discovers Bun, mise, user, and Rust executables before checking dependencies, the user service manager, and Omarchy configuration; failed preflight leaves the installation unchanged. The systemd user environment already contains the session's Wayland and D-Bus variables.
 
-Install or update the guest application with `scripts/dev.sh bash scripts/install-linux.sh`. This builds the release profile, installs the runtime and desktop entry, applies the Omarchy bindings, and restarts the user service. For iteration, append `--debug`. The installed service explicitly includes mise and Rust on PATH; desktop-session commands that invoke Node directly should use `/home/omarchy/.local/share/mise/shims/node`.
+Install or update the guest application with `scripts/dev.sh bash scripts/install-linux.sh`. This builds the release profile, installs the runtime and desktop entry, applies the Omarchy bindings, and restarts the user service. For iteration, append `--debug`. The installed service includes `~/.bun/bin`, mise, and Rust on PATH.
 
 The installed launcher survived a guest reboot on 2026-09-09: `command-space.service` was active and enabled, the command socket answered `ping`, and Hyprland reported no configuration errors. Its default shortcut was then exercised through the live viewer. A process started by `scripts/install-linux.sh` runs independently of this development session.
 
@@ -32,7 +32,7 @@ The installed launcher survived a guest reboot on 2026-09-09: `command-space.ser
 
 `runtime` contains isolated protocol tests plus opt-in desktop tests. Its supervisor lives in `runtime/host.mjs`; each command executes in a fresh `runtime/invocation.mjs` process. Lifecycle tests cover repeated launches, stale callbacks, timer and child-process cleanup, and background refresh behavior.
 
-Run the bundled native workflow suite with `node --test extensions/omarchy-tools/tests/*.test.mjs`. It covers TypeScript forms, subprocess arguments and cancellation, and original Omarchy scripts in disposable homes. Administrative workflow tests record system changes instead of altering live network, SSH, VM, or encryption configuration.
+Run the bundled native workflow suite with `bun test --timeout 60000 extensions/omarchy-tools/tests`. It covers TypeScript forms, subprocess arguments and cancellation, and original Omarchy scripts in disposable homes. Administrative workflow tests record system changes instead of altering live network, SSH, VM, or encryption configuration.
 
 `scripts/verify-menu.mjs` compares the installed menu against Omarchy’s own menu model. `scripts/verify-native-menu.mjs` checks native provider rows against installed packages, themes, plugins, bindings, and other system sources without executing mutation actions. `scripts/verify-extensions.mjs` exercises installation, updates, failure cleanup, and removal. `scripts/verify-integration.py` uninstalls and reinstalls desktop integration while checking retained data and browser bridge registration.
 
@@ -42,9 +42,11 @@ Run the bundled native workflow suite with `node --test extensions/omarchy-tools
 
 For destructive clipboard UI checks, `python3 scripts/verify-clipboard-clear.py prepare` starts a launcher with disposable history. Exercise Cancel and then Confirm through the UI, then run the script with `finish` to verify clearing and restore the normal service. Its `restore` command also restores the normal service after an interrupted test. The fixture checks that the real history and configuration remain unchanged.
 
-`bash scripts/package-linux.sh` creates an architecture-specific archive and checksum in `dist`, including the runtime, bundled commands, and documentation. It runs `scripts/verify-linux-package.mjs` to check extraction, the executable, bundled compilation, and an isolated launch of the extracted TypeScript host. It also runs `scripts/verify-installer.mjs`, which executes the actual installer and Rust binary in a disposable home with recorded systemd commands and a private command socket. That regression exercises restricted SSH PATH, mise-only Node discovery, desktop and browser registration, bundled updates, and dependency failures that must leave existing files unchanged.
+`bash scripts/package-linux.sh` creates an architecture-specific archive and checksum in `dist`, including the runtime, bundled commands, and documentation. It runs `scripts/verify-linux-package.mjs` to check extraction, the executable, bundled compilation, and an isolated launch of the extracted TypeScript host. It also runs `scripts/verify-installer.mjs`, which executes the actual installer and Rust binary in a disposable home with recorded systemd commands and a private command socket. That regression exercises restricted SSH PATH, user-local Bun discovery, desktop and browser registration, bundled updates, and dependency failures that must leave existing files unchanged.
 
-`node scripts/verify-updater-isolated.mjs <archive>` checks download, installation, and rollback using disposable XDG directories and a fixture installer. The release workflow runs it for each architecture. It does not restart the desktop launcher.
+Release archives retain a compatibility manifest so version 1.0.1 can recognize updates. Bun handles all dependencies.
+
+`bun scripts/verify-updater-isolated.mjs <archive>` checks download, installation, and rollback using disposable XDG directories and a fixture installer. The release workflow runs it for each architecture. It does not restart the desktop launcher.
 
 `scripts/verify-updater.mjs` installs the actual package through a local release fixture, then verifies restoration after a deliberately failed installer. Run it through a separate systemd user unit with an absolute script path, since it restarts the live launcher service.
 

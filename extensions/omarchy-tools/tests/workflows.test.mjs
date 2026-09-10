@@ -146,3 +146,13 @@ test("closing the extension worker terminates its operation process group", { sk
   await new Promise(resolve => setTimeout(resolve, 1400));
   await assert.rejects(fs.access(output), { code: "ENOENT" });
 });
+
+
+test("supervised commands preserve literal option separators and shell syntax", async t => {
+  const args = ["--", "--flag", "file with spaces", "$HOME; $(echo injected)", "", "Café", "--"];
+  const output = await run("python3", ["-c", "import json, sys; print(json.dumps(sys.argv[1:]))", ...args]);
+  assert.deepEqual(JSON.parse(output), args);
+  const recorder = path.join(await temporary(t), "record-arguments");
+  await fs.writeFile(recorder, '#!/usr/bin/env python3\nimport json, sys\nprint(json.dumps(sys.argv[1:]))\n', {mode: 0o755});
+  assert.deepEqual(JSON.parse(await run(recorder, args)), args);
+});

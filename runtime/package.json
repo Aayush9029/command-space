@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test tests/*.test.mjs" },
+  "scripts": { "test": "bun test --timeout 60000 tests/" },
   "dependencies": {
     "esbuild": "0.28.2",
     "react": "19.2.0",

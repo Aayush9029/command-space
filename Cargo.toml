@@ -3,7 +3,7 @@ name = "command-space"
 version = "1.0.1"
 edition = "2024"
 license = "MIT"
-description = "A native Omarchy command launcher, derived from RustCast"
+description = "A native command launcher optimized for Omarchy"
 repository = "https://github.com/Aayush9029/command-space"
 autobins = false
 

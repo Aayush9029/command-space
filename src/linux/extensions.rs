@@ -182,14 +182,8 @@ fn install_source(source: &Path, replace: bool) -> Result<String, String> {
             .and_then(Value::as_object)
             .is_some_and(|deps| !deps.is_empty())
         {
-            let status = Command::new("npm")
-                .args([
-                    "install",
-                    "--ignore-scripts",
-                    "--omit=dev",
-                    "--no-audit",
-                    "--no-fund",
-                ])
+            let status = Command::new("bun")
+                .args(["install", "--ignore-scripts", "--production"])
                 .current_dir(&staging)
                 .status()
                 .map_err(|e| e.to_string())?;
@@ -490,7 +484,7 @@ impl Session {
                     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("runtime")
                 }
             });
-        let mut process = Command::new("node")
+        let mut process = Command::new("bun")
             .arg(runtime.join("host.mjs"))
             .process_group(0)
             .env(

@@ -70,11 +70,12 @@ export async function selectedPaths(value, { field = "files", directory = false,
 const supervisedCommand = `
 const {spawn} = require('node:child_process');
 const parent = process.ppid;
-const child = spawn(process.argv[1], process.argv.slice(2), {stdio:'inherit'});
+const {command, args} = JSON.parse(process.argv[1]);
+const child = spawn(command, args, {stdio:'inherit'});
 const watcher = setInterval(() => {
   if (process.ppid !== parent) process.kill(-process.pid, 'SIGKILL');
 }, 200);
-child.once('error', error => { console.error(error.code === 'ENOENT' ? process.argv[1] + ' is not installed' : error.message); clearInterval(watcher); process.exitCode = 1; });
+child.once('error', error => { console.error(error.code === 'ENOENT' ? command + ' is not installed' : error.message); clearInterval(watcher); process.exitCode = 1; });
 child.once('close', code => { clearInterval(watcher); process.exitCode = code ?? 1; });
 `;
 
@@ -82,7 +83,7 @@ export function run(command, args, { signal, timeout = 120000, env = process.env
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(signal.reason);
     const unix = process.platform !== "win32";
-    const child = spawn(unix ? process.execPath : command, unix ? ["-e", supervisedCommand, command, ...args] : args,
+    const child = spawn(unix ? process.execPath : command, unix ? ["-e", supervisedCommand, JSON.stringify({command, args})] : args,
       { stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], detached: unix, env });
     let stdout = "", stderr = "", timedOut = false;
     let escalation;

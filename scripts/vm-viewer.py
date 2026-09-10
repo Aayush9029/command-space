@@ -5,6 +5,7 @@ import json
 import secrets
 import socket
 import subprocess
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -314,7 +315,10 @@ test('capture failures reject refresh and allow a later retry',async()=>{
 
 
 if args.self_test:
-    subprocess.run(["node", "--input-type=module", "-"], input=(FRAME_QUEUE + FRAME_QUEUE_TEST).encode(), check=True)
+    with tempfile.NamedTemporaryFile(suffix=".test.mjs") as tests:
+        tests.write((FRAME_QUEUE + FRAME_QUEUE_TEST).encode())
+        tests.flush()
+        subprocess.run(["bun", "test", tests.name], check=True)
 else:
     print(f"http://127.0.0.1:{args.port}/?token={token}", flush=True)
     http.server.ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()

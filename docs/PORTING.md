@@ -16,7 +16,7 @@ The development workflow and SSH configuration are documented in [DEVELOPMENT.md
 
 ## Extension runtime
 
-TypeScript and TSX commands are bundled with esbuild. A lightweight Node.js supervisor starts a fresh invocation process for each command launch. A React reconciler serializes native UI trees to the Rust launcher; callbacks travel back to the invocation process. Each extension has its own persistent storage directory.
+TypeScript and TSX commands are bundled with esbuild. A lightweight Bun supervisor starts a fresh invocation process for each command launch. A React reconciler serializes native UI trees to the Rust launcher; callbacks travel back to the invocation process. Each extension has its own persistent storage directory.
 
 Persistent storage mutations use an advisory file lock across foreground and background processes. Concurrent-writer tests preserve independent storage keys and cache namespaces; terminating a writer releases its lock, and serialization failures leave the previous file intact.
 
@@ -46,7 +46,7 @@ Unmodified sources from [raycast/extensions](https://github.com/raycast/extensio
 | JSON Format | GitHub folder install from `main` | Native UI installation, rapid form input, formatted detail navigation, clipboard output, and source update |
 | Days Until Christmas | `ed51c7f3a2e6b944744592c09cc997dff0397ba6` | Unmodified menu-bar command, native emoji tray icon, title, scheduled activation, and restoration at login |
 
-Run `npm test` in `runtime` for isolated protocol tests. The installed-extension suite additionally requires a desktop session and `COMMAND_SPACE_TEST_EXTENSIONS` pointing to the installation directory. These tests write known test data to the guest clipboard and extension history.
+Run `bun run test` in `runtime` for isolated protocol tests. The installed-extension suite additionally requires a desktop session and `COMMAND_SPACE_TEST_EXTENSIONS` pointing to the installation directory. These tests write known test data to the guest clipboard and extension history.
 
 ## Native features verified
 
@@ -74,7 +74,7 @@ The Linux window API reads desktops and window bounds and moves or resizes windo
 
 ## Background and browser extensions
 
-Menu-bar extensions retain their own Node worker and React state while the launcher is closed. Activation is stored privately and restored at login. Manifest intervals refresh commands; source updates reload active commands. Native StatusNotifierItem menus support sections, nested actions, keyboard shortcut labels, confirmations, preferences, refresh, and stopping a command. Glyphs, color emoji, and raster icons render in the tray. `launchCommand` carries arguments, launch type, and launch context between workers.
+Menu-bar extensions retain their own Bun worker and React state while the launcher is closed. Activation is stored privately and restored at login. Manifest intervals refresh commands; source updates reload active commands. Native StatusNotifierItem menus support sections, nested actions, keyboard shortcut labels, confirmations, preferences, refresh, and stopping a command. Glyphs, color emoji, and raster icons render in the tray. `launchCommand` carries arguments, launch type, and launch context between workers.
 
 Native click tests exercised counter state, nested tray actions, confirmation dialogs, nested action panels, and calendar submission. A September 17 date arrived as a JavaScript Date alongside the form’s text and checkbox values. Two successive guest reboot tests verified the launcher shortcut and all three expected trays. The tray service now waits for the desktop watcher if startup ordering brings the launcher up first.
 
@@ -84,11 +84,11 @@ Clipboard APIs offer simultaneous text/HTML alternatives and file URIs. Confiden
 
 ## Installation and updates
 
-Uninstall/reinstall verification restores Omarchy’s bar and shortcut configuration while preserving settings, extension installations, and storage. The installer discovers mise and user tools and validates Node.js 24 or newer, Python 3.12 or newer, required commands, the user service manager, and the Omarchy configuration before modifying installed files. It waits for the command socket before reporting success. SSH authentication and the launcher service both survive a guest reboot. The final installed launcher was verified after a fresh boot: the service was enabled and active, the socket responded, Hyprland had no configuration errors, and both Super+Space and the bar button opened the native UI. The launcher tray and retained menu-bar extension returned automatically.
+Uninstall/reinstall verification restores Omarchy’s bar and shortcut configuration while preserving settings, extension installations, and storage. The installer discovers mise and user tools and validates Bun 1.4.2 or newer, Python 3.12 or newer, required commands, the user service manager, and the Omarchy configuration before modifying installed files. It waits for the command socket before reporting success. SSH authentication and the launcher service both survive a guest reboot. The final installed launcher was verified after a fresh boot: the service was enabled and active, the socket responded, Hyprland had no configuration errors, and both Super+Space and the bar button opened the native UI. The launcher tray and retained menu-bar extension returned automatically.
 
 Linux packaging includes the native executable and extension runtime. Release metadata selects the current architecture, requires a matching SHA-256 checksum, rejects links and unsafe archive paths, and verifies the executable version before installation. Updates run in a separate user unit so restarting the launcher cannot terminate its installer. An end-to-end fixture installed the valid ARM64 package, then deliberately replaced the binary and runtime with broken files and failed. The updater restored the exact previous files, restarted the service, and preserved settings.
 
-The current ARM64 package passes extraction, executable, bundled-command compilation, and extracted TypeScript host checks. Its actual installer and Rust binary also pass a restricted-PATH regression in a disposable home, with Node available only through mise. The test verifies desktop and browser registration and persistent bundled-extension sources while recording systemd operations and providing an isolated command socket. Missing Node, Node 22, and missing rsync fail without changing the existing binary, runtime, or configuration. The same regression reproduces the original missing-Node failure against the earlier installer.
+The current ARM64 package passes extraction, executable, bundled-command compilation, and extracted TypeScript host checks. Its actual installer and Rust binary also pass a restricted-PATH regression in a disposable home, with Bun available only in the user installation. The test verifies desktop and browser registration and persistent bundled-extension sources while recording systemd operations and providing an isolated command socket. Missing Bun, unsupported Bun versions, and missing rsync fail without changing the existing binary, runtime, or configuration.
 
 An isolated updater test covers download, checksum validation, installation, and rollback of the binary, runtime, and bundled extension files while preserving user extensions and stored data. Advisory-lock tests cover concurrent attempts and owner crashes. These tests supplement the live service installation checks.
 

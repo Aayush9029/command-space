@@ -16,17 +16,15 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: runtime/package-lock.json
+          bun-version: '1.4.2'
       - run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev libssl-dev pkg-config fonts-dejavu-core util-linux
       - run: rustup show
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --all-targets
-      - run: npm ci --prefix runtime --ignore-scripts --no-audit --no-fund
-      - run: npm test --prefix runtime
-      - run: node --test extensions/omarchy-tools/tests/*.test.mjs
+      - run: bun install --cwd runtime --frozen-lockfile --ignore-scripts
+      - run: bun run --cwd runtime test
+      - run: bun test --timeout 60000 extensions/omarchy-tools/tests/*.test.mjs

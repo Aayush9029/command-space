@@ -213,7 +213,7 @@ fn browser_bridge(remove: bool) -> Result<(), String> {
     if !script.exists() {
         return Ok(());
     }
-    let mut command = Command::new("node");
+    let mut command = Command::new("bun");
     command.arg(script);
     if remove {
         command.arg("--uninstall");

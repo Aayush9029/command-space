@@ -15,7 +15,16 @@ async function fixture(t, command) {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "command-space-workflow-host-"));
   await fs.mkdir(path.join(home, "bin"));
   for (const command of ["omarchy-webapp-install", "omarchy-tui-install", "omarchy-reminder", "omarchy-menu-share", "omarchy-transcode", "omarchy-transcode-ascii", "omarchy-theme-bg-set", "omarchy-games-retro-cores", "omarchy-games-retro-install", "omarchy-theme-install", "omarchy-git-url-check", "omarchy-plugin-add", "omarchy-plugin-catalog", "omarchy-plugin-enable", "omarchy-dns", "systemd-run"]) {
-    const source = `#!${process.execPath}\nconst fs=require('node:fs');const path=require('node:path');const command=path.basename(process.argv[1]);fs.appendFileSync(path.join(process.env.HOME,'calls.jsonl'),JSON.stringify([command,process.argv.slice(2)])+'\\n');if(process.argv[2]==='show') console.log(JSON.stringify({reminders:[]}));if(command==='omarchy-games-retro-cores') console.log('Nintendo SNES / SFC (snes9x)');if(command==='omarchy-plugin-add') console.log('Added fixture.widget into '+process.env.HOME+'/.config/omarchy/plugins/fixture.widget');if(command==='omarchy-plugin-catalog') console.log(JSON.stringify([{id:'fixture.widget',kinds:['bar-widget']}]))\n`;
+    const source = `#!/usr/bin/env python3
+import json, os, sys
+command = os.path.basename(sys.argv[0])
+with open(os.path.join(os.environ["HOME"], "calls.jsonl"), "a") as output:
+    output.write(json.dumps([command, sys.argv[1:]]) + "\\n")
+if sys.argv[1:2] == ["show"]: print(json.dumps({"reminders": []}))
+if command == "omarchy-games-retro-cores": print("Nintendo SNES / SFC (snes9x)")
+if command == "omarchy-plugin-add": print("Added fixture.widget into " + os.environ["HOME"] + "/.config/omarchy/plugins/fixture.widget")
+if command == "omarchy-plugin-catalog": print(json.dumps([{"id": "fixture.widget", "kinds": ["bar-widget"]}]))
+`;
     await fs.writeFile(path.join(home, "bin", command), source, { mode: 0o755 });
   }
   const child = spawn(process.execPath, [runtime], { env: { ...process.env, HOME: home, PATH: `${home}/bin:${process.env.PATH}`, XDG_DATA_HOME: path.join(home, "data") } });
@@ -113,7 +122,9 @@ test("workflow submissions call each original operation with complete arguments"
     const first = await host.wait(message => message.type === "render" && nodes(message.tree).some(node => node.type === "Action.SubmitForm"));
     host.send({ type: "event", callback: nodes(first.tree).find(node => node.type === "Action.SubmitForm").props.onAction.$callback, args: [example.values(file, host.home)] });
     await host.wait(message => message.type === "close");
-    assert.ok((await host.calls()).some(call => JSON.stringify(call) === JSON.stringify(example.expected(file, host.home))));
+    const calls = await host.calls();
+    const expected = example.expected(file, host.home);
+    assert.ok(calls.some(call => JSON.stringify(call) === JSON.stringify(expected)), `${example.command}: expected ${JSON.stringify(expected)} in ${JSON.stringify(calls)}`);
   });
 });
 

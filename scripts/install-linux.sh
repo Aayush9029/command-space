@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
-export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$HOME/.cargo/bin:${PATH:-/usr/local/bin:/usr/bin:/bin}"
+export PATH="$HOME/.bun/bin:$HOME/.local/share/mise/shims:$HOME/.local/bin:$HOME/.cargo/bin:${PATH:-/usr/local/bin:/usr/bin:/bin}"
 
 fail() {
   printf 'Command Space installation: %s\n' "$*" >&2
   exit 1
 }
 
-for dependency in bash node npm python3 flock rsync systemctl systemd-run update-desktop-database dirname install mkdir mv ln chmod cat sleep; do
+for dependency in bash bun python3 flock rsync systemctl systemd-run update-desktop-database dirname install mkdir mv ln chmod cat sleep; do
   command -v "$dependency" >/dev/null 2>&1 || fail "Missing required command: $dependency. Install it and retry."
 done
 project_dir=$(cd "$(dirname "$0")/.." && pwd)
 cd "$project_dir"
-node_version=$(node --version) || fail 'Could not run Node.js. Check the configured Node installation.'
-if [[ ! "$node_version" =~ ^v([0-9]+)\. ]] || (( BASH_REMATCH[1] < 24 )); then
-  fail "Node.js 24 or newer is required; found $node_version."
+bun_version=$(bun --version) || fail 'Could not run Bun. Check the configured Bun installation.'
+if [[ ! "$bun_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+  fail "Bun 1.4.2 or newer is required; found $bun_version."
+fi
+if (( BASH_REMATCH[1] < 1 || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] < 4) || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] == 4 && BASH_REMATCH[3] < 2) )); then
+  fail "Bun 1.4.2 or newer is required; found $bun_version."
 fi
 python3 -c 'import sys; sys.exit(sys.version_info < (3, 12))' || fail 'Python 3.12 or newer is required.'
 systemctl --user show-environment >/dev/null || fail 'The systemd user session is unavailable. Run the installer as your desktop user.'
@@ -27,7 +30,7 @@ if [[ "$profile" != --prebuilt ]]; then
     command -v "$dependency" >/dev/null 2>&1 || fail "Missing required command: $dependency. Install Rust and retry."
   done
 fi
-for file in runtime/host.mjs runtime/package-lock.json scripts/start-daemon.sh; do
+for file in runtime/host.mjs runtime/bun.lock scripts/start-daemon.sh; do
   [[ -f "$file" ]] || fail "The package is incomplete: missing $file."
 done
 [[ -d extensions ]] || fail 'The package is incomplete: missing bundled extensions.'
@@ -51,7 +54,7 @@ rsync -a --delete --exclude node_modules --exclude tests runtime/ "$install_root
 if [[ "$profile" == --prebuilt ]]; then
   rsync -a --delete runtime/node_modules/ "$install_root/runtime/node_modules/"
 else
-  npm ci --prefix "$install_root/runtime" --omit=dev --ignore-scripts --no-audit --no-fund
+  bun install --cwd "$install_root/runtime" --production --frozen-lockfile --ignore-scripts
 fi
 ln -sfn "$install_root/bin/command-space" "$HOME/.local/bin/command-space"
 install -m 755 scripts/start-daemon.sh "$install_root/bin/start-daemon"
@@ -69,7 +72,7 @@ PartOf=graphical-session.target
 [Service]
 Type=simple
 ExecStart=%h/.local/share/command-space/bin/start-daemon
-Environment=PATH=%h/.local/bin:%h/.local/share/mise/shims:%h/.cargo/bin:/usr/share/omarchy/bin:/usr/local/bin:/usr/bin
+Environment=PATH=%h/.bun/bin:%h/.local/bin:%h/.local/share/mise/shims:%h/.cargo/bin:/usr/share/omarchy/bin:/usr/local/bin:/usr/bin
 Restart=on-failure
 RestartSec=2
 

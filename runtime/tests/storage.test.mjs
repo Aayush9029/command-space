@@ -63,7 +63,7 @@ test("a killed invocation releases its storage lock without persisting partial c
 test("failed storage serialization preserves the original file and releases the lock", async t => {
   const file = path.join(await fixture(t), "values.json");
   updateStore(file, values => { values.retained = true; });
-  assert.throws(() => updateStore(file, values => { values.circular = values; }), /circular/i);
+  assert.throws(() => updateStore(file, values => { values.circular = values; }), /circular|cyclic/i);
   updateStore(file, values => { values.next = true; });
   assert.deepEqual(readStore(file), {retained: true, next: true});
   assert(!(await fs.readdir(path.dirname(file))).some(name => name.endsWith(".tmp")));

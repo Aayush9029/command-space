@@ -12,4 +12,4 @@ if [ "$1" = cargo ]; then
   set -- nice -n 10 "$@"
 fi
 printf -v command '%q ' "$@"
-ssh "$vm_host" "export PATH=\"\$HOME/.cargo/bin:\$HOME/.local/share/mise/shims:\$PATH\"; cd $vm_dir; $command"
+ssh "$vm_host" "export PATH=\"\$HOME/.bun/bin:\$HOME/.cargo/bin:\$HOME/.local/share/mise/shims:\$PATH\"; cd $vm_dir; $command"

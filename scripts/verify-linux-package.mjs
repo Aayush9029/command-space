@@ -10,6 +10,7 @@ import {once} from "node:events";
 import readline from "node:readline";
 import {promisify} from "node:util";
 
+assert.ok(process.versions.bun,"Run this validator with Bun");
 const run = promisify(execFile);
 const archive = path.resolve(process.argv[2]);
 const name = path.basename(archive);
@@ -66,9 +67,18 @@ try {
   const binary = path.join(bundle,"bin/command-space");
   const {stdout} = await run(binary,["--version"],{timeout:10000});
   assert.equal(stdout.trim(),`Command Space ${version}`);
-  for (const file of ["scripts/install-linux.sh","scripts/start-daemon.sh","runtime/host.mjs","runtime/invocation.mjs","runtime/storage.mjs","runtime/updater.mjs","runtime/unpack-release.py","runtime/icon-catalog.mjs","runtime/icons/catalog.json","runtime/icons/LICENSE","README.md","LICENSE.md","docs/DEVELOPMENT.md","docs/PORTING.md","docs/assets/launcher-dark.png"]) await fs.access(path.join(bundle,file));
+  for (const file of ["scripts/install-linux.sh","scripts/start-daemon.sh","runtime/host.mjs","runtime/bun.lock","runtime/invocation.mjs","runtime/storage.mjs","runtime/updater.mjs","runtime/unpack-release.py","runtime/icon-catalog.mjs","runtime/icons/catalog.json","runtime/icons/LICENSE","README.md","LICENSE.md","docs/DEVELOPMENT.md","docs/PORTING.md","docs/assets/window-commands.png"]) await fs.access(path.join(bundle,file));
   await run("bash",["-n",path.join(bundle,"scripts/install-linux.sh")]);
   await run("bash",["-n",path.join(bundle,"scripts/start-daemon.sh")]);
+  const runtimeManifest = JSON.parse(await fs.readFile(path.join(bundle,"runtime/package.json"),"utf8"));
+  const legacyLock = JSON.parse(await fs.readFile(path.join(bundle,"runtime/package-lock.json"),"utf8"));
+  assert.equal(legacyLock.lockfileVersion,3,"The 1.0.1 updater compatibility artifact must remain a valid lockfile");
+  assert.deepEqual(legacyLock.packages[""].dependencies,runtimeManifest.dependencies,"The updater compatibility artifact must match the bundled dependency versions");
+  for (const [dependency,version] of Object.entries(runtimeManifest.dependencies)) {
+    assert.equal(legacyLock.packages[`node_modules/${dependency}`].version,version);
+    const installed = JSON.parse(await fs.readFile(path.join(bundle,"runtime/node_modules",dependency,"package.json"),"utf8"));
+    assert.equal(installed.version,version,"Packaged dependencies must match the frozen Bun installation");
+  }
   const require = createRequire(path.join(bundle,"runtime/package.json"));
   const esbuild = require("esbuild");
   assert.equal(typeof require("react").createElement,"function");

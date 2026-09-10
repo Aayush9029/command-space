@@ -55,7 +55,7 @@ test("update lock excludes contenders and is released when its owner crashes", {
   } finally { await held.close(); }
   await (await acquireUpdateLock(directory)).close();
   const updater = new URL("../updater.mjs",import.meta.url).href;
-  const child = spawn(process.execPath,["--input-type=module","-e",`import {acquireUpdateLock} from ${JSON.stringify(updater)}; const lock = await acquireUpdateLock(process.argv[1]); process.stdout.write("locked\\n"); setInterval(() => {},1000);`,directory],{stdio:["ignore","pipe","pipe"]});
+  const child = spawn(process.execPath,["--input-type=module","-e",`import {acquireUpdateLock} from ${JSON.stringify(updater)}; const lock = await acquireUpdateLock(process.argv[1]); process.stdout.write("locked\\n"); setInterval(() => { if (lock.fd < 0) process.exit(1); },1000);`,directory],{stdio:["ignore","pipe","pipe"]});
   t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
   const exited = once(child,"exit");
   await Promise.race([once(child.stdout,"data"),exited.then(() => {throw new Error("Lock owner exited before acquiring the lock");})]);

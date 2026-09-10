@@ -76,7 +76,7 @@ export async function prepare(release, directory) {
   if (header.subarray(0,4).toString("hex") !== "7f454c46" || header[4] !== 2 || header[5] !== 1 || header.readUInt16LE(18) !== ({aarch64:183,x86_64:62}[release.architecture])) throw new Error("Release executable has the wrong architecture");
   const {stdout} = await run(executable,["--version"],{timeout:5000});
   if (stdout.trim() !== `Command Space ${release.version}`) throw new Error("Release executable version does not match the requested update");
-  for (const required of ["runtime/host.mjs","runtime/package-lock.json","scripts/install-linux.sh","scripts/start-daemon.sh"]) await fs.access(path.join(packagePath,required));
+  for (const required of ["runtime/host.mjs","runtime/bun.lock","scripts/install-linux.sh","scripts/start-daemon.sh"]) await fs.access(path.join(packagePath,required));
   return packagePath;
 }
 
@@ -92,7 +92,7 @@ export async function acquireUpdateLock(directory) {
   const lock = await fs.open(path.join(directory,"install.lock"),"a",0o600);
   try {
     await new Promise((resolve,reject) => {
-      // flock and Node share this open file description; closing Node's handle releases the lock, including after a crash.
+      // The inherited descriptor shares its lock with this process and releases it even after a crash.
       const child = spawn("flock",["--nonblock","--conflict-exit-code","75","3"],{stdio:["ignore","ignore","pipe",lock.fd]});
       let diagnostic = "";
       child.stderr.setEncoding("utf8");

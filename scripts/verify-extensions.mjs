@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 const binary = process.argv[2] || path.join(os.homedir(), ".local/bin/command-space");
 const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "command-space-lifecycle-"));
 const source = path.join(temporary, "source");
-const env = {...process.env, XDG_DATA_HOME:path.join(temporary,"data"), XDG_STATE_HOME:path.join(temporary,"state"), npm_config_registry:"http://127.0.0.1:9", npm_config_fetch_retries:"0", npm_config_fetch_timeout:"1000"};
+const env = {...process.env, XDG_DATA_HOME:path.join(temporary,"data"), XDG_STATE_HOME:path.join(temporary,"state"), BUN_CONFIG_VERBOSE_FETCH:"false"};
 const root = path.join(env.XDG_DATA_HOME,"command-space");
 const installed = path.join(root,"extensions/lifecycle-fixture");
 function run(args, success = true) {
@@ -18,6 +18,7 @@ function run(args, success = true) {
 const manifest = {name:"lifecycle-fixture",title:"Lifecycle Fixture",commands:[{name:"main",title:"Fixture",mode:"no-view"}]};
 try {
   await fs.mkdir(path.join(source,"src"),{recursive:true});
+  await fs.writeFile(path.join(source,"bunfig.toml"),'[install]\nregistry = "http://127.0.0.1:9"\n');
   await fs.writeFile(path.join(source,"package.json"),JSON.stringify(manifest));
   await fs.writeFile(path.join(source,"src/main.ts"),"export default function Command() { return 'first'; }");
   run(["install","source"]);
