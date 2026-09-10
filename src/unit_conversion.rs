@@ -1,5 +1,6 @@
 //! Unit conversion parsing and calculation.
 
+#[cfg(target_os = "macos")]
 use crate::{
     app::{
         ToApp,
@@ -241,6 +242,7 @@ const UNITS: &[UnitDef] = &[
     },
 ];
 
+#[cfg(target_os = "macos")]
 impl ToApp for ConversionResult {
     fn to_app(&self) -> crate::app::apps::App {
         let source = format!(

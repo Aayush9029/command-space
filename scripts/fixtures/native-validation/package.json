@@ -1,0 +1,36 @@
+{
+  "name": "command-space-validation",
+  "title": "Command Space Validation",
+  "commands": [
+    {
+      "name": "menu",
+      "title": "Validate Tray",
+      "mode": "menu-bar",
+      "interval": "1h"
+    },
+    {
+      "name": "form",
+      "title": "Validate Form",
+      "mode": "view"
+    },
+    {
+      "name": "browser",
+      "title": "Validate Browser",
+      "mode": "view"
+    },
+    {
+      "name": "grid",
+      "title": "Validate Grid",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "label",
+      "title": "Tray Label",
+      "type": "textfield",
+      "default": "Validation",
+      "required": false
+    }
+  ]
+}

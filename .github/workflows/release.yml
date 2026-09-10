@@ -1,118 +1,57 @@
-name: Build macOS Release
+name: Linux Release
 on:
   push:
-    tags:
-      - "v*"
+    tags: ['v*']
   workflow_dispatch:
 permissions:
-  contents: write
-
+  contents: read
 jobs:
-  build-macos:
-    runs-on: macos-14
-    env:
-      APP_VERSION: ${{ github.ref_name }}
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: x86_64
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-universal-cargo-build-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build macOS app (universal)
-        run: bash scripts/build-macos.sh
-
-      - name: Sign macOS app
+          node-version: '24'
+      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev libssl-dev pkg-config fonts-dejavu-core
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --locked --all-targets
+      - run: bash scripts/package-linux.sh
+      - run: npm test --prefix runtime
+      - name: Check tag matches the executable
+        if: startsWith(github.ref, 'refs/tags/')
         env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-          MACOS_CERTIFICATE_NAME: ${{ secrets.MACOS_CERTIFICATE_NAME }}
-          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
-          MACOS_CI_KEYCHAIN_PWD: ${{ secrets.MACOS_CI_KEYCHAIN_PWD }}
-          MACOS_NOTARISATION_APPLE_ID: ${{ secrets.MACOS_NOTARISATION_APPLE_ID }}
-          MACOS_NOTARIZATION_PWD: ${{ secrets.MACOS_NOTARIZATION_PWD }}
-          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
-          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
-          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
-
-        run: bash scripts/sign-macos.sh
-
-      - name: Package DMG
-        run: bash scripts/package-macos.sh
-        env:
-          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
-          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
-          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
-          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
-          MACOS_NOTARISATION_APPLE_ID: ${{ secrets.MACOS_NOTARISATION_APPLE_ID }}
-          MACOS_NOTARIZATION_PWD: ${{ secrets.MACOS_NOTARIZATION_PWD }}
-
-      # Homebrew-style artifact from the built .app
-      - name: Create artifacts directory
-        run: mkdir -p artifacts
-
-      - name: Zip universal .app for Homebrew
-        # APP_BUNDLE_PATH is set by scripts/build-macos.sh
-        run: |
-          if [ -z "$APP_BUNDLE_PATH" ]; then
-            echo "APP_BUNDLE_PATH not set by build-macos.sh" >&2
-            exit 1
-          fi
-          APP_NAME=$(basename "$APP_BUNDLE_PATH")
-          zip -r "artifacts/${APP_NAME%.app}-universal-macos.app.zip" "$APP_BUNDLE_PATH"
-
-      - name: Upload DMG artifact
-        uses: actions/upload-artifact@v4
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: test "$(target/release/command-space --version)" = "Command Space ${RELEASE_TAG#v}"
+      - uses: actions/upload-artifact@v4
         with:
-          name: rustcast-macos-dmg
-          path: ${{ env.DMG_PATH }}
-          retention-days: 7
-
-      - name: Upload .app zip artifact (Homebrew)
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-bundles
-          path: artifacts/*.zip
-          retention-days: 7
-
-  create-release:
-    needs: build-macos
-    runs-on: ubuntu-latest
+          name: linux-${{ matrix.arch }}
+          path: dist/*
+          retention-days: 14
+  publish:
     if: startsWith(github.ref, 'refs/tags/')
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
         with:
-          path: artifacts
-
-      - name: Create release
-        uses: softprops/action-gh-release@v1
-        with:
-          # Include both DMG and .app zip(s)
-          files: |
-            artifacts/**/*.dmg
-            artifacts/**/*.zip
-          draft: false
-          prerelease: false
+          path: dist
+          merge-multiple: true
+      - name: Publish Linux packages
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" dist/* --verify-tag --title "Command Space $RELEASE_TAG" --generate-notes

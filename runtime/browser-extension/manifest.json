@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Command Space Browser Bridge",
+  "description": "Connect browser tabs and page content to Command Space extensions on Linux.",
+  "version": "0.1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0EuiDiPSTKHJZa6+TSYOUCcFoOifUfTe3/gj/ih/RkirNPSgalLFhOtxU2vC8N17yKyN8HGiXole7YFXJ6zM0BfWShEf+Wy/pZSNbLlrKT6Fywlm/gFTseuj3k5ZJ6laVLkwC/mZbH6aAu97OjseM6+ubgiQFF7cWX2x7OHvNKQyxuRxOcAmFJ8uM3NoCqKnAmgRXpWvJa0reaNFsoVzLxChTcv+R2WCpfJc+tvzfPKcTnSzq/5bugHqqg8jOD5OQ+PFcgHV9gUaoUqmG8jcGs1aw/4iN4I08WUywhkZe5smxxKoIg46qm/68nGmyU88qeiiRnYDONn7DPY1brxkiwIDAQAB",
+  "permissions": [
+    "nativeMessaging",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Command Space",
+    "default_popup": "popup.html"
+  }
+}

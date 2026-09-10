@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "command-space.launcher",
+  "name": "Command Space",
+  "version": "0.1.0",
+  "author": "Command Space",
+  "description": "Open the native Command Space launcher",
+  "kinds": ["bar-widget"],
+  "entryPoints": {"barWidget": "BarWidget.qml"},
+  "barWidget": {"displayName": "Command Space", "description": "Apps, Omarchy commands, and extensions", "category": "Compositor", "allowMultiple": false}
+}

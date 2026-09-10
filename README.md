@@ -1,172 +1,80 @@
-<!-- Header -->
-<p align="center">
-  <img src="docs/icon.png" width="128" height="128" alt="RustCast icon" />
-</p>
+# Command Space
 
-<h1 align="center">RustCast</h1>
+A native launcher for Omarchy, forked from [RustCast](https://github.com/MystikoLab/rustcast). Rust and Iced render the interface; isolated Node.js workers run TypeScript and React extensions.
 
-<p align="center">
-  An open-source, Rust-powered productivity, blazing fast popup launcher for apps, utilities, and workflows.
-</p>
+Command Space follows Omarchy’s active colors and flat window style. Super+Space opens applications, the complete nested Omarchy menu, and extension commands in one place.
 
-<p align="center">
-  <a href="https://github.com/MystikoLab/rustcast/releases/latest">
-    <img alt="Latest release" src="https://img.shields.io/github/v/release/MystikoLab/rustcast?display_name=tag&sort=semver&style=flat-square" />
-  </a>
-  <a href="https://github.com/MystikoLab/rustcast/releases">
-    <img alt="Downloads" src="https://img.shields.io/github/downloads/MystikoLab/rustcast/total?style=flat-square" />
-  </a>
-  <a href="https://discord.mystikolabs.com">
-    <img alt="Discord" src="https://img.shields.io/discord/1463119282459119844?label=Discord&logo=discord&logoColor=white&style=flat-square" />
-  </a>
-  <a href="https://github.com/MystikoLab/rustcast/stargazers">
-    <img alt="Stars" src="https://img.shields.io/github/stars/MystikoLab/rustcast?style=flat-square" />
-  </a>
-  <a href="https://github.com/MystikoLab/rustcast/blob/main/LICENSE">
-    <img alt="License" src="https://img.shields.io/github/license/MystikoLab/rustcast?style=flat-square" />
-  </a>
-</p>
+## Features
 
-<p align="center">
-  <a href="https://sxitch.app">
-    <img src="https://sxitch.app/sxitch_icon_nobg_white.png" width="32" height="32" alt="Sxitch" style="vertical-align: middle;" />
-    &nbsp;
-    <strong>Like RustCast? Check out Sxitch</strong>
-    &nbsp;
-  </a>
-</p>
+- Installed applications, fuzzy search, aliases, favorites, shell commands, and custom modes.
+- Omarchy’s installed menu definitions and user overrides, including nested Install, Remove, Setup, Learn, Trigger, Style, and System actions.
+- Clipboard history with text and image previews, copy, paste, deletion, and clearing.
+- File search, previews, reveal, copy path, and trash actions.
+- Emoji search, calculator, unit conversions, twelve window tiling positions, and nine launcher positions.
+- Native settings for appearance, shortcuts, placement, search, and commands.
+- TypeScript/TSX extensions with React lists, forms, details, grids, actions, navigation, preferences, arguments, storage, and clipboard access.
+- GitHub and local-folder extension installation, updates, and removal.
+- OAuth with PKCE and desktop-keyring token storage.
+- Configurable AI endpoints with streaming and cancellation.
+- Persistent menu-bar extensions, native tray menus, and scheduled background commands.
+- Browser tabs and page content through the included Chromium/Firefox bridge.
+- Linux release checks, checksum-verified updates, and rollback after installation failures.
 
-> [Those who sponsor me also get a personal easter egg inside RustCast](https://github.com/sponsors/MystikoLab)
+The port is under active development. [PORTING.md](docs/PORTING.md) records verified behavior and remaining compatibility work. Extension compatibility depends on the APIs and external programs each extension uses. macOS frameworks and AppleScript are outside the Linux host’s scope.
 
-**Config docs:** https://github.com/MystikoLab/rustcast/wiki
+## Install on Omarchy
 
-**Community:** https://discord.gg/bDfNYPbnC5
+Install Rust, Node.js, npm, and the Linux build dependencies listed in [DEVELOPMENT.md](docs/DEVELOPMENT.md), then run:
 
-**Plugins**:
-[RustCast Library for shell scripts](https://github.com/MystikoLab/rustcast-library)
-
-> For support use github discussions / issues / the discord
->
-> You can also contact MystikoLab / secretised at
-> [admin@rustcast.app](mailto:admin+gh@rustcast.app)
-
-![RustCast Demo](./docs/rustcast-latest-demo.png)
-
-## Installation:
-
-### Via Homebrew:
-
-```
-brew install --cask unsecretised/tap/rustcast
+```sh
+bash scripts/install-linux.sh
 ```
 
-### Via github releases
+The installer builds an optimized binary, installs the extension runtime, configures a user service, and integrates the Omarchy shortcuts and bar button. Configuration backups are kept in `~/.local/state/command-space/backups`.
 
-1. Download the dmg from this link
-   [https://github.com/MystikoLab/rustcast/releases/latest/download/rustcast.dmg](https://github.com/MystikoLab/rustcast/releases/latest/download/rustcast.dmg)
+Use Super+Space to open the launcher, Super+Ctrl+V for clipboard history, and Super+Ctrl+E for emoji. Search for Command Space Settings to customize them. Ctrl+K opens actions; Escape goes back.
 
-## Config:
+```sh
+command-space show builtin:settings
+command-space extension install /path/to/extension
+command-space extension install https://github.com/raycast/extensions/tree/main/extensions/json-format
+command-space extension update json-format
+command-space extension remove json-format
+```
 
-Full config docs can be found
-[here](https://github.com/MystikoLab/rustcast/wiki)
+Extension sources execute as your user. The installer installs npm dependencies with lifecycle scripts disabled.
 
-The config file should be located at: `~/.config/rustcast/config.toml` RustCast
-creates the default configuration for you, but it does use its
-[default options](docs/default.toml) Here's a full list of everything you can configure
-[The list](docs/config.toml).
+## AI extensions
 
-## Feature list:
+In Settings → Extensions, enter an OpenAI-compatible API base URL and a model identifier. API keys are stored in the desktop keyring. Local providers can be used without a key. Calls to Raycast’s `AI.ask` use the configured model; optional model mappings can be set in `[ai.models]` in the configuration file.
 
-### Finished:
+## Browser and background extensions
 
-- [x] Autoload installed apps 11/11/2025
-- [x] Search through apps 11/11/2025
-- [x] Generate [randomvar](https://github.com/Nazeofel) (between 0 and 100) via
-      the app. Simply type `randomvar` and it will generate the num for you
-- [x] Image icons next to the text 13/12/2025
-- [x] Scrollable options 12/12/2025
-- [x] Customisable themes (13/12/2025)
-  - [x] Configurable colours
-- [x] Spotify control - Ability to control spotify via the app
-- [x] Allow variables to be passed into custom shell scripts.
-- [x] Google your query. Simply type your query, and then put a `?` at the end,
-      and press enter
-- [x] Calculator (27/12/2025)
-- [x] Clipboard History (29/12/2025) This works by typing `cbhist` to enter the
-      clipboard history page, which allows you to access your clipboard history,
-- [x] Blur / transparent background (7/1/2026)
-- [x] Select the options using arrow keys
-- [x] Tray icons (8/1/2026)
-- [x] Unit Conversions (19/1/2026) thanks to
-      [Hriztam](https://github.com/hriztam)
-- [x] Emoji Searching (19/1/2026) Allows people to search for emojis through
-      rustcast
-- [x] RustCast modes (2/3/2026)
-- [x] Better documentation for the config (3/3/2026)
-- [x] Image rendering from clipboard history (13/3/2026)
-- [x] File searching (11/3/2026)
-- [x] CTRL n / p (vim motions) navigation for search results (5/3/2026)
-- [x] Settings Panel (22/3/2026)
+The installer adds the browser bridge to Omarchy’s existing Chromium extension list. Restart Chromium after installation. Extensions can call `BrowserExtension.getTabs()` and `getContent()` for text, HTML, and Markdown. Native messaging registration is also installed for Chrome, Brave, Edge, Vivaldi, and Firefox; their bridge needs to be loaded separately from `~/.local/share/command-space/runtime/browser-extension` or `browser-extension-firefox`. Chromium has been tested in the development VM.
 
-### Planned:
+Run a menu-bar command once to enable it. Its tray item continues working after the launcher closes and returns at login. The tray menu includes Refresh, Preferences, and Stop Extension. Commands with a manifest interval run on that schedule after activation.
 
-- [ ] Popup note-taking
-- [ ] Plugin Support (Partially implemented on 15/12/2025)
-- [ ] Hyperkey - Map CMD + OPT + CTRL + SHIFT to a physical key
-- [ ] Better hotkey picking
-- [ ] Ability to pick between tabs in firefox / chromium browsers - using
-      [Puppeteer](https://pptr.dev/)
+## Release updates
 
-### Not planned:
+Search for Check for Command Space Updates or use Settings → About. The launcher checks daily when enabled. Available updates offer release notes and installation; downloads are checked against the release checksum and architecture before replacing the installed files. Failed installations restore the previous binary and runtime.
 
-- [ ] Cross platform support Cancelled for now, as not within my ability to
-      support and maintain it
+The Linux release workflow builds ARM64 and x86-64 packages. No Linux release has been published yet. Local packages can be built with `bash scripts/package-linux.sh`; an extracted package installs with `bash scripts/install-linux.sh --prebuilt`.
 
-## RustCast wouldn't be possible without these people:
+## Development
 
-- [Nazeofel](https://github.com/Nazeofel) - First sponsor + initiator of windows
-  support
-- [Mnem42](https://github.com/mnem42) - Helped add windows support
-- [Random Scientist](https://github.com/Random-Scientist) - First ever community
-  contributor to rustcast
-- [Lemon](https://github.com/lemonlambda) - Sponsored me, and gave me free
-  Discord Nitro
-- [Julie / Zoey](https://github.com/zoey-on-github) - Gave me amazing feedback
-  and has been using RustCast since almost the first version!
-- [Hriztam](https://github.com/hriztam) - Added support for unit conversions to
-  rustcast
-- [Lars-Schumann](https://github.com/Lars-Schumann) - Sponsored me
-- [Tanishq Dubey](https://github.com/tanishq-dubey) - Contributor, improved the
-  file search to use `mdfind`
-- [JON](https://github.com/jiasunzhu613) - Contributor,
+For the configured Try Omarchy VM on this Mac:
 
-And of course, all the people who starred my repo!!
+```sh
+ssh omarchy
+scripts/dev.sh cargo test --bin command-space
+scripts/dev.sh npm --prefix runtime test
+scripts/dev.sh bash scripts/install-linux.sh
+```
 
-And the updated list of contributors to the macos version:
+The Mac keeps source files; compilation happens over SSH on the guest’s native filesystem. See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for the shared folder, SSH configuration, desktop testing, and validation commands.
 
-<a href="https://github.com/MystikoLab/rustcast/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=MystikoLab/rustcast" />
-</a>
+Settings live in `~/.config/command-space/config.toml`. Installed extensions and their data live under `~/.local/share/command-space`. `command-space integration uninstall` removes desktop integration and preserves settings and extension data.
 
-### Easter egg list:
+## License
 
-- Nazeofel (Random Variable on discord) -> led to the _randomvar_ easter egg
-- Lemon -> led to the _lemon_ easter egg that shows "lemon" on rustcast
-- Lars-Schumann -> search _f_ and get ferris.rs as a result
-- Me -> 67
-
-## If you like rustcast, consider starring it on github :)
-
-<a href="https://www.star-history.com/?repos=MystikoLab%2Frustcast&type=date&logscale=&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=MystikoLab/rustcast&type=date&theme=dark&legend=top-left&sealed_token=EtM2v-ntr2wpPFNfmn0rtwFAOKe16HhLZoKa_jXAtnoueqAqttIf1KVHibKwqsolfB2hH5NLe414Qk35D25WEnTSrXDDntmh4lt4ETr6o2SBkbU2BXfw6fMGFXIpKrtGa-r_qzdJpwREp_I_qI1yNCjXMVAtoztK3BPSrVzvqFPIMnca9GMqncdJKrvx" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=MystikoLab/rustcast&type=date&legend=top-left&sealed_token=EtM2v-ntr2wpPFNfmn0rtwFAOKe16HhLZoKa_jXAtnoueqAqttIf1KVHibKwqsolfB2hH5NLe414Qk35D25WEnTSrXDDntmh4lt4ETr6o2SBkbU2BXfw6fMGFXIpKrtGa-r_qzdJpwREp_I_qI1yNCjXMVAtoztK3BPSrVzvqFPIMnca9GMqncdJKrvx" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=MystikoLab/rustcast&type=date&legend=top-left&sealed_token=EtM2v-ntr2wpPFNfmn0rtwFAOKe16HhLZoKa_jXAtnoueqAqttIf1KVHibKwqsolfB2hH5NLe414Qk35D25WEnTSrXDDntmh4lt4ETr6o2SBkbU2BXfw6fMGFXIpKrtGa-r_qzdJpwREp_I_qI1yNCjXMVAtoztK3BPSrVzvqFPIMnca9GMqncdJKrvx" />
- </picture>
-</a>
-
-## Motivations:
-
-I didn't want to pay for raycast + wanted to get better at rust. Raycast in
-itself is one of the most useful productivity apps in my opinion, and it is
-truly an underappreciated marvel of computer engineering
+MIT. RustCast’s license and original source attribution are retained. Third-party extensions have their own licenses.
