@@ -6,6 +6,7 @@ import secrets
 import socket
 import subprocess
 import threading
+import time
 import urllib.parse
 
 
@@ -34,6 +35,8 @@ def qmp(commands):
                     if "return" in response:
                         result = response["return"]
                         break
+                if command["execute"] == "input-send-event":
+                    time.sleep(0.025)
             return result
 
 
