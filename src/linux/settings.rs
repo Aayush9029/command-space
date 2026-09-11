@@ -790,39 +790,41 @@ fn choice<'a>(
         .iter()
         .map(|value| Choice(value.to_string()))
         .collect();
-    let content = pick_list(values.clone(), Some(selected.clone()), move |value| {
-        Message::Setting(key.clone(), value.0)
-    })
-    .padding([8, 10])
-    .text_size(13)
-    .width(Fill)
-    .style(move |_, status| pick_list::Style {
-        text_color: colors.foreground,
-        placeholder_color: colors.muted,
-        handle_color: colors.muted,
-        background: colors.background.into(),
-        border: Border {
-            color: if matches!(status, pick_list::Status::Opened { .. }) {
-                colors.accent
-            } else {
-                border_color(colors)
+    let content = super::dropdown::wrap(
+        pick_list(values.clone(), Some(selected.clone()), move |value| {
+            Message::Setting(key.clone(), value.0)
+        })
+        .padding([8, 10])
+        .text_size(13)
+        .width(Fill)
+        .style(move |_, status| pick_list::Style {
+            text_color: colors.foreground,
+            placeholder_color: colors.muted,
+            handle_color: colors.muted,
+            background: colors.background.into(),
+            border: Border {
+                color: if matches!(status, pick_list::Status::Opened { .. }) {
+                    colors.accent
+                } else {
+                    border_color(colors)
+                },
+                width: 1.,
+                radius: 2.into(),
             },
-            width: 1.,
-            radius: 2.into(),
-        },
-    })
-    .menu_style(move |_| widget::overlay::menu::Style {
-        background: colors.background.into(),
-        border: Border {
-            color: border_color(colors),
-            width: 1.,
-            radius: 2.into(),
-        },
-        text_color: colors.foreground,
-        selected_text_color: colors.foreground,
-        selected_background: colors.selection.into(),
-        shadow: Default::default(),
-    });
+        })
+        .menu_style(move |_| widget::overlay::menu::Style {
+            background: colors.background.into(),
+            border: Border {
+                color: border_color(colors),
+                width: 1.,
+                radius: 2.into(),
+            },
+            text_color: colors.foreground,
+            selected_text_color: colors.foreground,
+            selected_background: colors.selection.into(),
+            shadow: Default::default(),
+        }),
+    );
     setting_row(
         title,
         super::focusable::wrap(id, content, move |key| {

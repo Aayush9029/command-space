@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Form, environment } from "@raycast/api";
 import { useWorkflow, WorkflowActions } from "./components";
-import { sshKeys, launchTerminalOperation } from "./system-workflows.mjs";
+import { sshKeys, launchTerminalOperation } from "./system-workflows.ts";
 
 export default function SetupSSHD() {
   const workflow = useWorkflow();

@@ -1,6 +1,6 @@
 import { Form } from "@raycast/api";
 import { useWorkflow, WorkflowActions } from "./components";
-import { installTheme } from "./workflows.mjs";
+import { installTheme } from "./workflows.ts";
 
 export default function InstallTheme() {
   const workflow = useWorkflow();

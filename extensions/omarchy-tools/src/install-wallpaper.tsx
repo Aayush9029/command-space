@@ -1,6 +1,6 @@
 import { Form } from "@raycast/api";
 import { useWorkflow, WorkflowActions, FileField } from "./components";
-import { installWallpapers } from "./workflows.mjs";
+import { installWallpapers } from "./workflows.ts";
 
 export default function InstallWallpaper() {
   const workflow = useWorkflow();

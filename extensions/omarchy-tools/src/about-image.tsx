@@ -1,6 +1,6 @@
 import { Form } from "@raycast/api";
 import { useWorkflow, WorkflowActions, FileField, run } from "./components";
-import { brandingArguments } from "./workflows.mjs";
+import { brandingArguments } from "./workflows.ts";
 
 export function BrandingImage({ target = "about" }) {
   const workflow = useWorkflow();

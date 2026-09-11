@@ -209,7 +209,7 @@ pub fn uninstall() -> Result<(), String> {
 }
 
 fn browser_bridge(remove: bool) -> Result<(), String> {
-    let script = data_dir().join("runtime/install-browser.mjs");
+    let script = data_dir().join("runtime/install-browser.ts");
     if !script.exists() {
         return Ok(());
     }

@@ -130,11 +130,20 @@ impl Catalog {
         entries
     }
 
-    pub fn hidden_keys(&self, config: &Config) -> HashSet<String> {
+    fn hidden_keys(&self, config: &Config, apps: &[Entry]) -> HashSet<String> {
         let mut keys: HashSet<_> = config.blacklist.iter().cloned().collect();
         if !keys.is_empty() {
-            for entry in self.inventory(config) {
-                if config.is_hidden(&entry) {
+            let mut entries = self.menu.entries("root", true);
+            entries.extend(builtins());
+            entries.extend(super::windows::entries());
+            entries.extend(configured_entries(config));
+            for entry in entries
+                .iter()
+                .chain(apps)
+                .chain(&self.extensions)
+                .chain(&self.extension_management)
+            {
+                if config.is_hidden(entry) {
                     keys.insert(entry.hidden_key());
                 }
             }
@@ -206,6 +215,27 @@ impl Catalog {
         self.search_at(route, query, config, dynamic, ranking::now())
     }
 
+    pub fn search_dynamic(&self, query: &str, config: &Config, dynamic: &[Entry]) -> Vec<Entry> {
+        self.search_dynamic_at(query, config, dynamic, ranking::now())
+    }
+
+    fn search_dynamic_at(
+        &self,
+        query: &str,
+        config: &Config,
+        dynamic: &[Entry],
+        now: i64,
+    ) -> Vec<Entry> {
+        self.score_entries_at(
+            "apps",
+            query,
+            config,
+            dynamic.iter(),
+            &self.hidden_keys(config, dynamic),
+            now,
+        )
+    }
+
     fn search_at(
         &self,
         route: &str,
@@ -214,12 +244,15 @@ impl Catalog {
         dynamic: &[Entry],
         now: i64,
     ) -> Vec<Entry> {
+        if route == "apps" {
+            return self.search_dynamic_at(query, config, &self.apps, now);
+        }
         let expanded = config
             .aliases
             .get(query)
             .map(String::as_str)
             .unwrap_or(query);
-        let mut entries = match route {
+        let entries = match route {
             "clipboard" => clipboard(),
             "emoji" => emojis::iter()
                 .map(|e| {
@@ -239,7 +272,6 @@ impl Catalog {
                 entries.extend(self.extensions.clone());
                 entries
             }
-            "apps" => self.apps.clone(),
             "windows" => super::windows::entries(),
             "settings" => vec![
                 Entry::new(
@@ -300,25 +332,6 @@ impl Catalog {
                 entries
             }
         };
-        let hidden_keys = self.hidden_keys(config);
-        let hidden = |entry: &Entry| {
-            if hidden_keys.is_empty() || !entry.can_hide() {
-                return false;
-            }
-            let key = entry.hidden_key();
-            hidden_keys.contains(&entry.id)
-                || hidden_keys.contains(&key)
-                || config
-                    .blacklist
-                    .iter()
-                    .any(|key| key.eq_ignore_ascii_case(&entry.title))
-        };
-        entries.retain(|entry| !hidden(entry));
-        let pattern = Pattern::parse(expanded, CaseMatching::Ignore, Normalization::Smart);
-        let expanded_lower = expanded.to_lowercase();
-        let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
-        let mut buffer = Vec::new();
-        let mut haystack = String::new();
         let dynamic = if matches!(
             route,
             "clipboard"
@@ -335,9 +348,49 @@ impl Catalog {
         } else {
             dynamic
         };
+        self.score_entries_at(
+            route,
+            query,
+            config,
+            entries.iter().chain(dynamic),
+            &self.hidden_keys(config, &self.apps),
+            now,
+        )
+    }
+
+    fn score_entries_at<'a>(
+        &self,
+        route: &str,
+        query: &str,
+        config: &Config,
+        entries: impl Iterator<Item = &'a Entry>,
+        hidden_keys: &HashSet<String>,
+        now: i64,
+    ) -> Vec<Entry> {
+        let expanded = config
+            .aliases
+            .get(query)
+            .map(String::as_str)
+            .unwrap_or(query);
+        let hidden = |entry: &Entry| {
+            if hidden_keys.is_empty() || !entry.can_hide() {
+                return false;
+            }
+            let key = entry.hidden_key();
+            hidden_keys.contains(&entry.id)
+                || hidden_keys.contains(&key)
+                || config
+                    .blacklist
+                    .iter()
+                    .any(|key| key.eq_ignore_ascii_case(&entry.title))
+        };
+        let pattern = Pattern::parse(expanded, CaseMatching::Ignore, Normalization::Smart);
+        let expanded_lower = expanded.to_lowercase();
+        let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
+        let mut buffer = Vec::new();
+        let mut haystack = String::new();
         let mut scored = entries
-            .iter()
-            .chain(dynamic.iter().filter(|entry| !hidden(entry)))
+            .filter(|entry| !hidden(entry))
             .enumerate()
             .filter_map(|(order, entry)| {
                 let contents = if route == "clipboard" {
@@ -1080,6 +1133,220 @@ mod tests {
             catalog.search_at("root", "f", &config, &[], 2_000_000_000)[0].id,
             "app:firefox"
         );
+    }
+
+    fn cloned_dynamic_search(
+        catalog: &Catalog,
+        query: &str,
+        config: &Config,
+        dynamic: &[Entry],
+        now: i64,
+    ) -> Vec<Entry> {
+        let mut catalog = catalog.clone();
+        catalog.apps = dynamic.to_vec();
+        let entries = catalog.apps.clone();
+        let mut hidden_keys: HashSet<_> = config.blacklist.iter().cloned().collect();
+        if !hidden_keys.is_empty() {
+            for entry in catalog.inventory(config) {
+                if config.is_hidden(&entry) {
+                    hidden_keys.insert(entry.hidden_key());
+                }
+            }
+        }
+        catalog.score_entries_at("apps", query, config, entries.iter(), &hidden_keys, now)
+    }
+
+    fn synthetic_packages(count: usize) -> Vec<Entry> {
+        (0..count)
+            .map(|index| {
+                let name = format!(
+                    "{}-{index:06}",
+                    ["rust", "firefox", "zellij", "python"][index % 4]
+                );
+                let mut entry = Entry::new(
+                    &format!("package:{name}"),
+                    &name,
+                    "1.0.0 · Installed package with search metadata",
+                    "icon:Box",
+                    Action::Builtin(format!("package:{name}")),
+                );
+                entry.keywords = "tools development package".into();
+                entry.icon_font = "Symbols Nerd Font".into();
+                entry
+            })
+            .collect()
+    }
+
+    #[test]
+    fn borrowed_dynamic_search_preserves_clone_path_results_and_metadata() {
+        let now = 2_000_000_000;
+        let mut dynamic = synthetic_packages(300);
+        let command = Action::Extension {
+            extension: "tools".into(),
+            command: "work".into(),
+        };
+        dynamic.extend([
+            Entry::new("dynamic-work", "Work", "", "icon:Hammer", command.clone()),
+            Entry::new(
+                "dynamic-alias",
+                "Work alias",
+                "",
+                "icon:Hammer",
+                command.clone(),
+            ),
+            Entry::new(
+                "mode-item:first",
+                "Shell work",
+                "",
+                "",
+                Action::Shell("printf work".into()),
+            ),
+            Entry::new(
+                "mode-item:alias",
+                "Shell alias",
+                "",
+                "",
+                Action::Shell("printf work".into()),
+            ),
+            Entry::new(
+                "restore",
+                "Restore",
+                "",
+                "",
+                Action::Builtin("unhide:old".into()),
+            ),
+            application("unicode", "Résumé café"),
+        ]);
+        let mut catalog = Catalog {
+            apps: vec![Entry::new("catalog-only", "Existing work", "", "", command)],
+            ..Default::default()
+        };
+        catalog.ranks.insert(dynamic[190].id.clone(), (10, true));
+        catalog.activity.insert(
+            dynamic[290].id.clone(),
+            ranking::Usage {
+                weight: 12.,
+                updated_at: now,
+            },
+        );
+        for blacklist in [
+            vec![],
+            vec![dynamic[0].id.clone(), "PYTHON-000003".into()],
+            vec!["dynamic-alias".into()],
+            vec!["WORK ALIAS".into()],
+            vec!["mode-item:first".into()],
+            vec!["catalog-only".into()],
+            vec!["restore".into()],
+        ] {
+            for max_results in [0, 1, 3, 80, 1000] {
+                let config = Config {
+                    max_results,
+                    blacklist: blacklist.clone(),
+                    aliases: HashMap::from([("dev".into(), "tools".into())]),
+                    ..Default::default()
+                };
+                for query in [
+                    "",
+                    "rust",
+                    "FIREFOX",
+                    "rust-000004",
+                    "dev",
+                    "work",
+                    "shell",
+                    "resume",
+                    "missing",
+                ] {
+                    let expected = cloned_dynamic_search(&catalog, query, &config, &dynamic, now);
+                    let actual = catalog.search_dynamic_at(query, &config, &dynamic, now);
+                    assert_eq!(
+                        serde_json::to_value(&actual).unwrap(),
+                        serde_json::to_value(&expected).unwrap(),
+                        "query={query:?}, limit={max_results}, blacklist={blacklist:?}"
+                    );
+                }
+            }
+        }
+        let hidden_alias = Config {
+            blacklist: vec!["dynamic-alias".into()],
+            ..Default::default()
+        };
+        assert!(
+            catalog
+                .search_dynamic_at("work", &hidden_alias, &dynamic, now)
+                .iter()
+                .all(|entry| { !matches!(&entry.action, Action::Extension { .. }) })
+        );
+        let replaced_app = Config {
+            blacklist: vec!["catalog-only".into()],
+            ..Default::default()
+        };
+        assert_eq!(
+            catalog
+                .search_dynamic_at("work", &replaced_app, &dynamic, now)
+                .iter()
+                .filter(|entry| { matches!(&entry.action, Action::Extension { .. }) })
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    #[ignore = "Compares cloned and borrowed search over 100,000 synthetic packages"]
+    fn dynamic_catalog_search_profile() {
+        let dynamic = synthetic_packages(100_000);
+        let mut catalog = Catalog {
+            apps: synthetic_packages(1000),
+            ..Default::default()
+        };
+        catalog.ranks.insert(dynamic[99_990].id.clone(), (10, true));
+        let now = 2_000_000_000;
+        for blacklist in [vec![], vec![dynamic[0].id.clone()]] {
+            let config = Config {
+                blacklist,
+                ..Default::default()
+            };
+            for query in ["", "rust", "firefox", "zellij", "python", "missing"] {
+                let expected = cloned_dynamic_search(&catalog, query, &config, &dynamic, now);
+                let actual = catalog.search_dynamic_at(query, &config, &dynamic, now);
+                assert_eq!(
+                    serde_json::to_value(actual).unwrap(),
+                    serde_json::to_value(expected).unwrap()
+                );
+                let mut cloned = Vec::new();
+                let mut borrowed = Vec::new();
+                for iteration in 0..9 {
+                    for legacy in if iteration % 2 == 0 {
+                        [true, false]
+                    } else {
+                        [false, true]
+                    } {
+                        let started = Instant::now();
+                        let result = if legacy {
+                            cloned_dynamic_search(&catalog, query, &config, &dynamic, now)
+                        } else {
+                            catalog.search_dynamic_at(query, &config, &dynamic, now)
+                        };
+                        drop(std::hint::black_box(result));
+                        let elapsed = started.elapsed().as_secs_f64() * 1000.;
+                        if legacy {
+                            cloned.push(elapsed);
+                        } else {
+                            borrowed.push(elapsed);
+                        }
+                    }
+                }
+                cloned.sort_by(f64::total_cmp);
+                borrowed.sort_by(f64::total_cmp);
+                println!(
+                    "dynamic entries={} hidden={} query={query:?} cloned_median_ms={:.3} borrowed_median_ms={:.3} speedup={:.2}x",
+                    dynamic.len(),
+                    config.blacklist.len(),
+                    cloned[4],
+                    borrowed[4],
+                    cloned[4] / borrowed[4]
+                );
+            }
+        }
     }
 
     #[test]

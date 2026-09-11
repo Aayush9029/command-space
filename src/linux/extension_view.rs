@@ -69,7 +69,7 @@ impl ExtensionView {
                     widget::markdown::parse(node.text("markdown")).collect(),
                 );
             }
-            if node.kind.starts_with("Form.") {
+            if is_form_control(node) {
                 let id = node.text("id");
                 if !id.is_empty() {
                     if self
@@ -124,6 +124,14 @@ impl ExtensionView {
             }
         }
         self.nodes = nodes;
+        if !self.focused.is_empty()
+            && !self
+                .form_fields()
+                .iter()
+                .any(|node| node.text("id") == self.focused)
+        {
+            self.focused.clear();
+        }
     }
 
     pub fn root(&self) -> Option<&Node> {
@@ -223,11 +231,21 @@ impl ExtensionView {
     }
 
     pub fn form_fields(&self) -> Vec<&Node> {
-        self.nodes
-            .iter()
+        self.root()
+            .into_iter()
             .flat_map(Node::descendants)
-            .filter(|node| node.kind.starts_with("Form.") && !node.text("id").is_empty())
+            .filter(|node| {
+                is_form_control(node)
+                    && !node.text("id").is_empty()
+                    && node.props["disabled"] != true
+            })
             .collect()
+    }
+
+    pub fn needs_focus(&self) -> bool {
+        self.focused.is_empty()
+            && self.root().is_some_and(|node| node.kind == "Form")
+            && !self.form_fields().is_empty()
     }
 
     pub fn next_field(&self, backwards: bool) -> Option<String> {
@@ -238,6 +256,7 @@ impl ExtensionView {
         let index = match current {
             Some(index) if backwards => (index + fields.len() - 1) % fields.len(),
             Some(index) => (index + 1) % fields.len(),
+            None if backwards => fields.len().saturating_sub(1),
             None => 0,
         };
         fields.get(index).map(|node| node.text("id").into())
@@ -623,7 +642,7 @@ impl ExtensionView {
             .or_else(|| items.first())
             .map(|(title, _)| title.clone());
         let callback = node.callback("onChange")?;
-        Some(
+        Some(super::dropdown::wrap(
             widget::pick_list(titles, selected, move |title| {
                 let value = items
                     .iter()
@@ -635,9 +654,8 @@ impl ExtensionView {
             .padding([7, 10])
             .text_size(13)
             .style(move |_, status| select_style(colors, status))
-            .menu_style(move |_| menu_style(colors))
-            .into(),
-        )
+            .menu_style(move |_| menu_style(colors)),
+        ))
     }
 
     pub fn content<'a>(
@@ -893,12 +911,21 @@ impl ExtensionView {
     }
 
     fn form<'a>(&'a self, root: &'a Node, colors: Colors) -> Element<'a, Message> {
-        let mut body = column![].spacing(18).padding(24);
+        let mut body = Vec::new();
         for node in root
             .descendants()
             .into_iter()
             .filter(|n| n.kind.starts_with("Form."))
         {
+            let enabled = node.props["disabled"] != true;
+            let colors = if enabled {
+                colors
+            } else {
+                Colors {
+                    foreground: colors.muted,
+                    ..colors
+                }
+            };
             let id = node.text("id").to_string();
             let value = self.fields.get(&id).cloned().unwrap_or(Value::Null);
             let callback = node.callback("onChange");
@@ -1110,7 +1137,7 @@ impl ExtensionView {
                         .iter()
                         .find(|(_, v)| Some(v.as_str()) == value.as_str())
                         .map(|(title, _)| title.clone());
-                    Some(
+                    Some(super::dropdown::wrap(
                         widget::pick_list(titles, selected, move |title| {
                             let value = items
                                 .iter()
@@ -1123,9 +1150,8 @@ impl ExtensionView {
                         .padding([9, 10])
                         .text_size(14)
                         .style(move |_, status| select_style(colors, status))
-                        .menu_style(move |_| menu_style(colors))
-                        .into(),
-                    )
+                        .menu_style(move |_| menu_style(colors)),
+                    ))
                 }
                 "Form.Description" => Some(
                     text(node.text("text").to_string())
@@ -1142,13 +1168,13 @@ impl ExtensionView {
             };
             if let Some(field) = field {
                 if node.kind == "Form.Separator" {
-                    body = body.push(field);
+                    body.push((node.id.clone(), field));
                     continue;
                 }
-                let field = if node.text("id").is_empty() {
+                let field = if !is_form_control(node) || (node.text("id").is_empty() && enabled) {
                     field
                 } else {
-                    let focused = self.focused == node.text("id");
+                    let focused = enabled && self.focused == node.text("id");
                     let field = container(field)
                         .padding(2)
                         .style(move |_| container::Style {
@@ -1163,7 +1189,7 @@ impl ExtensionView {
                             },
                             ..Default::default()
                         });
-                    super::form_field::wrap(node.text("id").into(), focused, field.into())
+                    super::form_field::wrap(node.text("id").into(), focused, enabled, field.into())
                 };
                 let mut content = column![field].spacing(6).width(Fill);
                 if !node.text("error").is_empty() {
@@ -1174,7 +1200,7 @@ impl ExtensionView {
                     );
                 }
                 if node.text("title").is_empty() {
-                    body = body.push(content);
+                    body.push((node.id.clone(), content.into()));
                 } else {
                     let label = container(
                         text(node.text("title").to_owned())
@@ -1183,12 +1209,32 @@ impl ExtensionView {
                     )
                     .width(130)
                     .padding([10, 0]);
-                    body = body.push(row![label, content].spacing(16).align_y(Alignment::Start));
+                    body.push((
+                        node.id.clone(),
+                        row![label, content]
+                            .spacing(16)
+                            .align_y(Alignment::Start)
+                            .into(),
+                    ));
                 }
             }
         }
-        body.into()
+        super::form_field::column(body)
     }
+}
+
+fn is_form_control(node: &Node) -> bool {
+    matches!(
+        node.kind.as_str(),
+        "Form.TextField"
+            | "Form.PasswordField"
+            | "Form.TextArea"
+            | "Form.Checkbox"
+            | "Form.DatePicker"
+            | "Form.Dropdown"
+            | "Form.TagPicker"
+            | "Form.FilePicker"
+    )
 }
 
 fn field_border(colors: Colors, focused: bool) -> Border {
@@ -1317,6 +1363,116 @@ mod tests {
 
     fn form(value: &str) -> Vec<Node> {
         serde_json::from_value(json!([{"id":"page","type":"Form","props":{},"children":[{"id":"input","type":"Form.TextArea","props":{"id":"text","value":value},"children":[]}]}])).unwrap()
+    }
+
+    fn form_nodes(children: Vec<Value>) -> Vec<Node> {
+        serde_json::from_value(json!([{
+            "id": "form", "type": "Form", "children": children
+        }]))
+        .unwrap()
+    }
+
+    fn field(kind: &str, id: &str, disabled: bool) -> Value {
+        json!({
+            "id": format!("node-{id}"), "type": kind,
+            "props": {"id": id, "disabled": disabled, "defaultValue": id}
+        })
+    }
+
+    #[test]
+    fn form_focus_order_excludes_descriptions_disabled_controls_and_item_nodes() {
+        let mut children = vec![
+            field("Form.Description", "description", false),
+            field("Form.Separator", "separator", false),
+            field("Form.TextField", "disabled", true),
+            field("Form.Dropdown.Item", "choice", false),
+            field("Form.FutureControl", "unsupported", false),
+            field("Form.TextField", "", false),
+        ];
+        let ids = [
+            ("Form.TextField", "text"),
+            ("Form.PasswordField", "password"),
+            ("Form.TextArea", "area"),
+            ("Form.Checkbox", "checkbox"),
+            ("Form.DatePicker", "date"),
+            ("Form.Dropdown", "dropdown"),
+            ("Form.TagPicker", "tags"),
+            ("Form.FilePicker", "files"),
+        ];
+        children.extend(ids.iter().map(|(kind, id)| field(kind, id, false)));
+        let mut nodes = form_nodes(children);
+        nodes.extend(form_nodes(vec![field(
+            "Form.TextField",
+            "other-root",
+            false,
+        )]));
+        let mut view = ExtensionView::default();
+        view.update(nodes, 0);
+        assert_eq!(
+            view.form_fields()
+                .iter()
+                .map(|node| node.text("id"))
+                .collect::<Vec<_>>(),
+            ids.iter().map(|(_, id)| *id).collect::<Vec<_>>()
+        );
+        assert!(view.needs_focus());
+        assert_eq!(view.next_field(false).as_deref(), Some("text"));
+        assert_eq!(view.next_field(true).as_deref(), Some("files"));
+        view.focused = "text".into();
+        assert!(!view.needs_focus());
+        assert_eq!(view.next_field(true).as_deref(), Some("files"));
+        assert_eq!(view.next_field(false).as_deref(), Some("password"));
+        assert!(!view.fields.contains_key("description"));
+        assert!(!view.fields.contains_key("choice"));
+        assert_eq!(view.fields["disabled"], "disabled");
+    }
+
+    #[test]
+    fn same_root_form_changes_reconcile_focus_without_stealing_valid_focus() {
+        let first = field("Form.TextField", "first", false);
+        let second = field("Form.TextField", "second", false);
+        let mut view = ExtensionView::default();
+        view.update(form_nodes(vec![first.clone(), second.clone()]), 0);
+        view.focused = "first".into();
+        view.update(form_nodes(vec![second.clone(), first]), 0);
+        assert_eq!(view.focused, "first");
+        assert!(!view.needs_focus());
+        assert_eq!(view.next_field(false).as_deref(), Some("second"));
+        view.update(form_nodes(vec![second.clone()]), 0);
+        assert!(view.focused.is_empty());
+        assert!(view.needs_focus());
+        assert_eq!(view.next_field(false).as_deref(), Some("second"));
+        view.focused = "second".into();
+        view.update(form_nodes(vec![field("Form.TextField", "second", true)]), 0);
+        assert!(view.focused.is_empty());
+        assert!(!view.needs_focus());
+        assert_eq!(view.next_field(false), None);
+        assert_eq!(view.next_field(true), None);
+        view.update(form_nodes(vec![second]), 0);
+        assert!(view.needs_focus());
+        view.focused = "second".into();
+        view.update(
+            form_nodes(vec![field("Form.Description", "second", false)]),
+            0,
+        );
+        assert!(view.focused.is_empty());
+        assert!(!view.needs_focus());
+    }
+
+    #[test]
+    fn empty_form_gains_focus_when_controls_arrive_without_a_root_change() {
+        let mut view = ExtensionView::default();
+        view.update(form_nodes(vec![]), 0);
+        assert!(!view.needs_focus());
+        view.update(
+            form_nodes(vec![field("Form.TextField", "loaded", false)]),
+            0,
+        );
+        assert!(view.needs_focus());
+        assert_eq!(view.next_field(false).as_deref(), Some("loaded"));
+        view.update(vec![], 0);
+        assert!(!view.needs_focus());
+        assert_eq!(view.next_field(true), None);
     }
 
     #[test]

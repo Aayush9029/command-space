@@ -4,15 +4,21 @@ Build on Omarchy with Rust, Bun 1.4.2+, Python 3.12+, and the system dependencie
 
 ```sh
 bun install --cwd runtime --frozen-lockfile --ignore-scripts
+bun run --cwd runtime typecheck
+bun run --cwd runtime build
 cargo build --locked --bin super-space
 cargo fmt --all --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked --all-targets
 bun run --cwd runtime test
 bun test --timeout 60000 extensions/omarchy-tools/tests
+bun test scripts/*.test.ts
+python3 scripts/test-measure-performance.py
 ```
 
 From a Mac, prefix each command with `scripts/dev.sh` to sync and run it over SSH. Set `SUPER_SPACE_VM` to your SSH host; it defaults to `omarchy`. Builds stay on the guest's native filesystem.
+
+The strict TypeScript check covers the runtime, browser bridge, bundled extensions, fixtures, and validators. Bun executes TypeScript directly; the browser bridge is bundled to JavaScript with `bun run --cwd runtime build`. Generated browser files are not committed.
 
 ## Install
 

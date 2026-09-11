@@ -1,7 +1,7 @@
 import os from "node:os";
 import { Form, environment, confirmAlert } from "@raycast/api";
 import { useWorkflow, WorkflowActions } from "./components";
-import { windowsConfiguration, launchTerminalOperation } from "./system-workflows.mjs";
+import { windowsConfiguration, launchTerminalOperation } from "./system-workflows.ts";
 
 export default function InstallWindows() {
   const workflow = useWorkflow();

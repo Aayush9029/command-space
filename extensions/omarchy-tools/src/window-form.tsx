@@ -1,7 +1,8 @@
+import { errorMessage } from "./workflows.ts";
 import { useEffect, useState } from "react";
 import { Form, WindowManagement } from "@raycast/api";
 import { useWorkflow, WorkflowActions } from "./components";
-import { moveBounds, resizeBounds } from "./window-bounds.mjs";
+import { moveBounds, resizeBounds } from "./window-bounds.ts";
 
 type Target = Awaited<ReturnType<typeof WindowManagement.getActiveWindow>>;
 
@@ -22,7 +23,7 @@ export function WindowForm({ operation }: { operation: "move" | "resize" }) {
       if (window.bounds !== "fullscreen") {
         setValues(Object.fromEntries(Object.entries({ ...window.bounds.position, ...window.bounds.size }).map(([key, value]) => [key, String(value)])));
       }
-    }).catch(error => { if (mounted) setError(error.message); })
+    }).catch(error => { if (mounted) setError(errorMessage(error)); })
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
   }, []);

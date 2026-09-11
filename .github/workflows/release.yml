@@ -32,9 +32,13 @@ jobs:
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --all-targets
       - run: bash scripts/package-linux.sh
-      - run: bun scripts/verify-updater-isolated.mjs dist/super-space-*-linux-${{ matrix.arch }}.tar.gz
+      - run: bun scripts/verify-updater-isolated.ts dist/super-space-*-linux-${{ matrix.arch }}.tar.gz
+      - run: bun install --cwd runtime --frozen-lockfile --ignore-scripts
+      - run: bun run --cwd runtime typecheck
       - run: bun run --cwd runtime test
-      - run: bun test --timeout 60000 extensions/omarchy-tools/tests/*.test.mjs
+      - run: bun test --timeout 60000 extensions/omarchy-tools/tests/*.test.ts
+      - run: bun test scripts/*.test.ts
+      - run: python3 scripts/test-measure-performance.py
       - name: Check tag matches the executable
         if: startsWith(github.ref, 'refs/tags/')
         env:

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Form, Toast, showToast } from "@raycast/api";
 import { useWorkflow, WorkflowActions, FileField, run } from "./components";
-import { retroCores, retroGameArguments } from "./workflows.mjs";
+import { errorMessage, retroCores, retroGameArguments } from "./workflows.ts";
 
 export default function InstallRetroGame() {
   const workflow = useWorkflow();
@@ -9,9 +9,9 @@ export default function InstallRetroGame() {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     const controller = new AbortController();
-    run("omarchy-games-retro-cores", [], { signal: controller.signal }).then(output => setCores(retroCores(output)))
-      .catch(error => { if (!controller.signal.aborted) showToast({ style: Toast.Style.Failure, title: "Could not load cores", message: error.message }); })
-      .finally(() => setLoading(false));
+    run("omarchy-games-retro-cores", [], { signal: controller.signal }).then(output => { if (!controller.signal.aborted) setCores(retroCores(output)); })
+      .catch(error => { if (!controller.signal.aborted) showToast({ style: Toast.Style.Failure, title: "Could not load cores", message: errorMessage(error) }); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, []);
   return <Form navigationTitle="Install Retro Game" isLoading={loading || workflow.busy} actions={<WorkflowActions title="Install" workflow={workflow}

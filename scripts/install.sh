@@ -3,7 +3,7 @@ set -euo pipefail
 
 readonly bootstrap_url=https://raw.githubusercontent.com/Aayush9029/super-space/master/scripts/installer/bootstrap.py
 # Pin the helper contents so an unexpected download never runs.
-readonly bootstrap_sha256=ac11f2e557a5e4f24960ab2d9f54bc8842f3d0ef57e4f6c50154544fded93938
+readonly bootstrap_sha256=91a1d030b83759019665e97225c0ff54465c5df6aafdc9912ab3418a013f1213
 
 fail() {
   printf 'Super Space: %s\n' "$*" >&2

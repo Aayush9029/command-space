@@ -15,8 +15,8 @@ Super Space is a native launcher for Omarchy, built with Rust and Iced. Bun runs
 | `src/linux/icons.rs`, `extension_image.rs`, `tray_image.rs` | Icon lookup, image caches, and rendering |
 | `src/linux/integration.rs`, `windows.rs` | Desktop bindings and Hyprland operations |
 | `src/unit_conversion.rs` | Unit parsing and conversion |
-| `runtime/host.mjs`, `invocation.mjs` | Extension supervisor and command processes |
-| `runtime/api.mjs`, `renderer.mjs` | Extension API surface and React rendering |
+| `runtime/host.ts`, `invocation.ts` | Extension supervisor and command processes |
+| `runtime/api.ts`, `renderer.ts` | Extension API surface and React rendering |
 | `runtime/icons/` | Local icon catalog, artwork, and attribution |
 | `extensions/` | Bundled commands and workflow tests |
 | `scripts/` | VM development, installation, packaging, and validation |
@@ -31,6 +31,7 @@ Build and test Linux changes through `scripts/dev.sh`. It synchronizes the Mac c
 scripts/dev.sh cargo fmt --all --check
 scripts/dev.sh cargo clippy --locked --all-targets -- -D warnings
 scripts/dev.sh cargo test --locked --all-targets
+scripts/dev.sh bun run --cwd runtime typecheck
 scripts/dev.sh bun run --cwd runtime test
 scripts/dev.sh bun test --timeout 60000 extensions/omarchy-tools/tests
 ```

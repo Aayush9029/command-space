@@ -1,7 +1,8 @@
+import { errorMessage } from "./workflows.ts";
 import { useEffect, useState } from "react";
 import { Form, environment, Toast, showToast } from "@raycast/api";
 import { useWorkflow, WorkflowActions } from "./components";
-import { discoverEncryptedDrives, drivePassword, launchTerminalOperation } from "./system-workflows.mjs";
+import { discoverEncryptedDrives, drivePassword, launchTerminalOperation } from "./system-workflows.ts";
 
 export default function DrivePassword() {
   const workflow = useWorkflow();
@@ -9,9 +10,9 @@ export default function DrivePassword() {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     const controller = new AbortController();
-    discoverEncryptedDrives(undefined, controller.signal).then(setDrives)
-      .catch(error => { if (!controller.signal.aborted) showToast({ style: Toast.Style.Failure, title: "Could not list encrypted drives", message: error.message }); })
-      .finally(() => setLoading(false));
+    discoverEncryptedDrives(undefined, controller.signal).then(drives => { if (!controller.signal.aborted) setDrives(drives); })
+      .catch(error => { if (!controller.signal.aborted) showToast({ style: Toast.Style.Failure, title: "Could not list encrypted drives", message: errorMessage(error) }); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, []);
   return <Form navigationTitle="Change Drive Passphrase" isLoading={loading || workflow.busy}

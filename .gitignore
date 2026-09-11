@@ -4,3 +4,4 @@ clipboard.db
 node_modules/
 .local/
 /dist/
+/runtime/browser-extension/dist/

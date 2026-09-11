@@ -87,7 +87,9 @@ def unpack_package(archive, checksum, name, destination, arch):
                 raise ValueError("Archive exceeds extraction limits")
             member.mode = 0o755 if member.isdir() or member.mode & 0o111 else 0o644
             members.append(member)
-        required = ("scripts/install-linux.sh", "bin/super-space", "runtime/bun.lock", "runtime/host.mjs")
+        required = ("scripts/install-linux.sh", "bin/super-space", "runtime/bun.lock")
+        if not any(member.isfile() and member.name in ("super-space/runtime/host.ts", "super-space/runtime/host.mjs") for member in members):
+            raise ValueError("Package is incomplete: missing extension runtime")
         for relative in required:
             if not any(member.name.rstrip("/") == f"super-space/{relative}" and member.isfile() for member in members):
                 raise ValueError(f"Package is incomplete: missing {relative}")

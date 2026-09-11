@@ -1,0 +1,111 @@
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
+import {fileURLToPath} from "node:url";
+import {createHash, type BinaryLike} from "node:crypto";
+import {createServer} from "node:http";
+import {execFile} from "node:child_process";
+import {promisify} from "node:util";
+import {install} from "../runtime/updater.ts";
+
+const run = promisify(execFile);
+const source = path.resolve(process.argv[2]);
+const name = path.basename(source);
+const [,version] = /^super-space-(\d+\.\d+\.\d+)-linux-(aarch64|x86_64)\.tar\.gz$/.exec(name) || [];
+assert.ok(version,"Supply a Linux release archive");
+const temporary = await fs.mkdtemp(path.join(os.tmpdir(),"super-space-isolated-update-"));
+const savedEnvironment = Object.fromEntries(["XDG_DATA_HOME","XDG_STATE_HOME","PATH","SUPER_SPACE_TEST_LOG"].map(key => [key,process.env[key]]));
+const hash = (bytes: BinaryLike) => createHash("sha256").update(bytes).digest("hex");
+let archive: Buffer | undefined;
+function serverOrigin() {
+  const address = server.address();
+  assert.ok(address && typeof address === "object", "The fixture server must be listening on TCP");
+  return `http://127.0.0.1:${address.port}`;
+}
+const server = createServer((request,response) => {
+  if (request.url === "/release") {
+    const origin = serverOrigin();
+    response.setHeader("Content-Type","application/json");
+    response.end(JSON.stringify({tag_name:`v${version}`,assets:[name,`${name}.sha256`].map(name => ({name,browser_download_url:`${origin}/${name}`}))}));
+  } else {
+    assert.ok(archive, "Build the fixture archive before starting its server");
+    response.end(request.url?.endsWith(".sha256") ? `${hash(archive)}  ${name}\n` : archive);
+  }
+});
+try {
+  process.env.XDG_DATA_HOME = path.join(temporary,"data");
+  process.env.XDG_STATE_HOME = path.join(temporary,"state");
+  process.env.SUPER_SPACE_TEST_LOG = path.join(temporary,"service-calls");
+  const helpers = path.join(temporary,"helpers");
+  await fs.mkdir(helpers);
+  await fs.writeFile(path.join(helpers,"systemctl"),'#!/bin/sh\nprintf "%s\\n" "$*" >> "$SUPER_SPACE_TEST_LOG"\n',{mode:0o755});
+  await fs.writeFile(path.join(helpers,"notify-send"),'#!/bin/sh\nexit 0\n',{mode:0o755});
+  process.env.PATH = `${helpers}:${savedEnvironment.PATH}`;
+  const target = path.join(process.env.XDG_DATA_HOME,"super-space");
+  const preserved = ["extensions/user-extension/source.ts","extension-data/developer-tools/storage.json"];
+  for (const file of preserved) {
+    await fs.mkdir(path.dirname(path.join(target,file)),{recursive:true});
+    await fs.writeFile(path.join(target,file),`preserved ${file}`);
+  }
+  await run("python3",[fileURLToPath(new URL("../runtime/unpack-release.py",import.meta.url)),source,temporary],{timeout:30000});
+  const bundle = path.join(temporary,"super-space");
+  const makeArchive = async (installer: string) => {
+    await fs.writeFile(path.join(bundle,"scripts/install-linux.sh"),installer);
+    const output = path.join(temporary,"fixture.tar.gz");
+    await run("tar",["--format=ustar","--dereference","--hard-dereference","-czf",output,"-C",temporary,"super-space"],{timeout:30000});
+    archive = await fs.readFile(output);
+  };
+  const validInstaller = `#!/bin/bash
+set -euo pipefail
+project=$(cd "$(dirname "$0")/.." && pwd)
+target="$XDG_DATA_HOME/super-space"
+mkdir -p "$target/bin" "$target/runtime" "$target/bundled-extensions" "$target/extensions"
+cp "$project/bin/super-space" "$target/bin/super-space"
+rsync -a --delete "$project/runtime/" "$target/runtime/"
+rsync -a --delete "$project/extensions/" "$target/bundled-extensions/"
+for bundled in "$project/extensions"/*; do
+  [[ -d "$bundled" ]] || continue
+  destination="$target/extensions/$(basename "$bundled")"
+  mkdir -p "$destination"
+  rsync -a --delete "$bundled/" "$destination/"
+done
+`;
+  await makeArchive(validInstaller);
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0,"127.0.0.1",resolve);
+  });
+  const options = {api:`${serverOrigin()}/release`};
+  const status = path.join(process.env.XDG_STATE_HOME,"super-space/updates/status.json");
+  await install(version,"0.0.0",options);
+  assert.equal(JSON.parse(await fs.readFile(status,"utf8")).state,"complete");
+  const tracked = ["bin/super-space","runtime/host.ts"];
+  for (const extension of await fs.readdir(path.join(bundle,"extensions"))) {
+    tracked.push(`extensions/${extension}/package.json`,`bundled-extensions/${extension}/package.json`);
+  }
+  const installed = new Map<string, string>();
+  for (const file of tracked) installed.set(file,hash(await fs.readFile(path.join(target,file))));
+  await makeArchive(`${validInstaller}
+printf 'broken runtime' > "$target/runtime/host.ts"
+cp /bin/false "$target/bin/super-space"
+for bundled in "$target/bundled-extensions"/*; do
+  printf 'broken extension' > "$bundled/package.json"
+  printf 'broken extension' > "$target/extensions/$(basename "$bundled")/package.json"
+done
+exit 42
+`);
+  await assert.rejects(install(version,"0.0.0",options),/previous version was restored/);
+  for (const [file,digest] of installed) assert.equal(hash(await fs.readFile(path.join(target,file))),digest,`Rollback did not restore ${file}`);
+  for (const file of preserved) assert.equal(await fs.readFile(path.join(target,file),"utf8"),`preserved ${file}`);
+  assert.equal(JSON.parse(await fs.readFile(status,"utf8")).state,"failed");
+  assert.equal(await fs.readFile(process.env.SUPER_SPACE_TEST_LOG,"utf8"),"--user stop super-space.service\n--user restart super-space.service\n");
+  console.log(`Verified isolated update download, install, and rollback of ${tracked.length} binary, runtime, and bundled-extension files; user data preserved`);
+} finally {
+  if (server.listening) await new Promise(resolve => server.close(resolve));
+  for (const [key,value] of Object.entries(savedEnvironment)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  await fs.rm(temporary,{recursive:true,force:true});
+}

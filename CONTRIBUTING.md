@@ -22,7 +22,7 @@ Use clear names and small, direct functions. Add comments for constraints that t
 
 Run the checks in [Development](docs/DEVELOPMENT.md). Add regression tests for bugs and meaningful tests for new behavior. Use temporary files and disposable fixtures for settings, extension storage, and administrative commands.
 
-Rust changes should pass formatting, Clippy, and the Linux tests. Runtime changes should pass the Bun suite; bundled workflow changes have their own tests. Installer or release changes also need the package checks.
+Rust changes should pass formatting, Clippy, and the Linux tests. Runtime changes should pass strict TypeScript checking and the Bun suite; bundled workflow changes have their own tests. Installer or release changes also need the package checks.
 
 Desktop tests can open windows or change the clipboard. Run them deliberately on a test desktop, and say when you have only tested the code headlessly. Documentation-only changes need link and formatting checks.
 

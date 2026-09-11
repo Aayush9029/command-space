@@ -14,6 +14,11 @@
       "mode": "view"
     },
     {
+      "name": "refs",
+      "title": "Validate React Refs",
+      "mode": "view"
+    },
+    {
       "name": "browser",
       "title": "Validate Browser",
       "mode": "view"
@@ -21,6 +26,11 @@
     {
       "name": "grid",
       "title": "Validate Grid",
+      "mode": "view"
+    },
+    {
+      "name": "images",
+      "title": "Validate Image Cache",
       "mode": "view"
     },
     {

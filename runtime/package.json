@@ -3,10 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "test": "bun test --timeout 60000 tests/" },
+  "scripts": {
+    "build": "bun build-browser.ts",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "bun run build && bun test --timeout 60000 tests/"
+  },
   "dependencies": {
     "esbuild": "0.28.2",
-    "react": "19.2.0",
-    "react-reconciler": "0.33.0"
+    "react": "19.3.0",
+    "react-reconciler": "0.34.0"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "@types/react": "19.3.0",
+    "@types/react-reconciler": "0.33.0",
+    "typescript": "7.0.2"
   }
 }

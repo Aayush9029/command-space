@@ -26,9 +26,11 @@ pub enum Message {
     Activate(usize),
     Submit,
     Back,
+    DropdownDismissed,
     Hide,
     Show(String, bool),
     Opened(window::Id),
+    WindowResult(window::Id, u64, Result<(), String>),
     Dynamic(u64, String, Vec<Entry>),
     Files(u64, Vec<String>, String, Result<Vec<Entry>, String>),
     FileIndexRefreshed(u64, Vec<String>, Result<bool, String>),
@@ -59,6 +61,7 @@ pub enum Message {
     Key(Key, keyboard::Modifiers, bool),
     Url(String),
     Extension(u64, serde_json::Value),
+    ExtensionShortcut(u64, Key, keyboard::Modifiers),
     BackgroundResponse(u64, String, Result<serde_json::Value, String>),
     ExtensionInvoke(String, Vec<serde_json::Value>),
     ExtensionLoadMore(bool),
@@ -116,6 +119,7 @@ pub struct Launcher {
     dynamic_generation: u64,
     dynamic_loading: bool,
     window: Option<window::Id>,
+    window_generation: Arc<AtomicU64>,
     loading: bool,
     status: String,
     actions: bool,
@@ -233,26 +237,14 @@ impl Launcher {
         items
     }
 
-    fn focus_input(&self) -> Task<Message> {
+    fn focus_input(&mut self) -> Task<Message> {
         if self.extension.is_some()
             && self
                 .extension_view
                 .root()
                 .is_some_and(|node| node.kind == "Form")
         {
-            let fields = self.extension_view.form_fields();
-            let field = fields
-                .iter()
-                .find(|node| node.text("id") == self.extension_view.focused)
-                .copied()
-                .or_else(|| {
-                    fields
-                        .into_iter()
-                        .min_by_key(|node| !node.props["autoFocus"].as_bool().unwrap_or(false))
-                });
-            return field.map_or(Task::none(), |node| {
-                Task::done(Message::ExtensionFocus(node.text("id").into()))
-            });
+            return self.focus_form_input();
         }
         let field = self
             .extension_view
@@ -269,6 +261,29 @@ impl Launcher {
             .map(|node| format!("field:{}", node.text("id")))
             .unwrap_or_else(|| "search".into());
         widget::operation::focus(widget::Id::from(field))
+    }
+
+    fn focus_form_input(&mut self) -> Task<Message> {
+        let fields = self.extension_view.form_fields();
+        let field = fields
+            .iter()
+            .find(|node| node.text("id") == self.extension_view.focused)
+            .copied()
+            .or_else(|| {
+                fields
+                    .into_iter()
+                    .min_by_key(|node| !node.props["autoFocus"].as_bool().unwrap_or(false))
+            })
+            .map(|node| node.text("id").to_string());
+        field.map_or(Task::none(), |id| self.focus_extension_field(id))
+    }
+
+    fn pop_extension(&mut self) -> Task<Message> {
+        self.extension = None;
+        self.extension_view = Default::default();
+        self.query.clear();
+        self.rebuild();
+        self.focus_input()
     }
 
     pub fn new(initial: Option<String>) -> (Self, Task<Message>) {
@@ -332,6 +347,7 @@ impl Launcher {
             dynamic_generation: 0,
             dynamic_loading: false,
             window: None,
+            window_generation: Arc::new(AtomicU64::new(0)),
             loading: true,
             status,
             actions: false,
@@ -384,9 +400,8 @@ impl Launcher {
             || self.route == "updates"
             || self.route.starts_with("mode:")
         {
-            let mut catalog = self.catalog.clone();
-            catalog.apps = self.dynamic.clone();
-            catalog.search("apps", &self.query, &self.config, &[])
+            self.catalog
+                .search_dynamic(&self.query, &self.config, &self.dynamic)
         } else {
             self.catalog
                 .search(&self.route, &self.query, &self.config, &self.dynamic)
@@ -400,6 +415,77 @@ impl Launcher {
         {
             self.selected = index;
         }
+    }
+
+    fn extension_root(&self) -> Option<(String, String)> {
+        self.extension_view
+            .root()
+            .map(|node| (node.id.clone(), node.kind.clone()))
+    }
+
+    fn reconcile_extension_root(&mut self, previous: Option<(String, String)>) -> bool {
+        let current = self.extension_root();
+        if previous == current {
+            return false;
+        }
+        let changed_type = previous
+            .as_ref()
+            .zip(current.as_ref())
+            .is_some_and(|(previous, current)| previous.0 == current.0 && previous.1 != current.1);
+        if let Some((id, _)) = previous {
+            if changed_type {
+                self.extension_queries.remove(&id);
+            } else {
+                self.extension_queries
+                    .insert(id, (self.query.clone(), self.selected));
+            }
+        }
+        let restored = current
+            .and_then(|(id, _)| self.extension_queries.remove(&id))
+            .unwrap_or_default();
+        self.query = restored.0;
+        self.selected = restored.1;
+        self.actions = false;
+        true
+    }
+
+    fn extension_scroll_offset(&self) -> f32 {
+        if self.extension_view.grid_columns() > 0 {
+            self.extension_view
+                .grid_offset(&self.results, self.selected)
+        } else {
+            self.selected.saturating_sub(3) as f32 * 46.0
+        }
+    }
+
+    fn extension_selection(&self) -> Option<(String, Vec<serde_json::Value>)> {
+        let root = self.extension_view.root()?;
+        match self
+            .extension_view
+            .selection_message(self.results.get(self.selected))?
+        {
+            Message::ExtensionInvoke(_, values) => Some((root.id.clone(), values)),
+            _ => None,
+        }
+    }
+
+    fn extension_selection_changed(
+        &self,
+        previous: Option<(String, Vec<serde_json::Value>)>,
+    ) -> Option<Message> {
+        (self.extension_selection() != previous)
+            .then(|| {
+                self.extension_view
+                    .selection_message(self.results.get(self.selected))
+            })
+            .flatten()
+    }
+
+    fn filter_extension_results(&mut self) -> Option<Message> {
+        let previous = self.extension_selection();
+        self.selected = 0;
+        self.results = self.extension_view.entries(&self.query);
+        self.extension_selection_changed(previous)
     }
 
     fn show(&mut self, route: &str, toggle: bool) -> Task<Message> {
@@ -457,7 +543,7 @@ impl Launcher {
         self.rebuild();
         if let Some(id) = self.window {
             return Task::batch([
-                Self::focus_launcher(id),
+                self.focus_launcher(id),
                 widget::operation::focus("search"),
                 self.load_dynamic(),
             ]);
@@ -466,20 +552,37 @@ impl Launcher {
         self.present()
     }
 
-    fn focus_launcher(id: window::Id) -> Task<Message> {
-        window::gain_focus(id).chain(Task::perform(
-            async {
-                tokio::task::spawn_blocking(windows::raise_launcher)
-                    .await
-                    .map_err(|error| error.to_string())?
-            },
-            Message::Result,
-        ))
+    fn focus_launcher(&self, id: window::Id) -> Task<Message> {
+        window::gain_focus(id).chain(self.window_task(id, None, 0, true))
+    }
+
+    fn window_task(
+        &self,
+        id: window::Id,
+        rect: Option<windows::Rect>,
+        delay_ms: u64,
+        raise: bool,
+    ) -> Task<Message> {
+        let request = self.window_generation.load(Ordering::Relaxed);
+        let generation = Arc::clone(&self.window_generation);
+        let current = Arc::clone(&generation);
+        Task::perform(
+            run_window_operation(generation, request, delay_ms, move || {
+                if let Some(rect) = rect {
+                    windows::place("class:^super-space$", rect)?;
+                }
+                if raise && current.load(Ordering::Relaxed) == request {
+                    windows::raise_launcher()?;
+                }
+                Ok(())
+            }),
+            move |result| Message::WindowResult(id, request, result),
+        )
     }
 
     fn present(&mut self) -> Task<Message> {
         if let Some(id) = self.window {
-            return Self::focus_launcher(id);
+            return self.focus_launcher(id);
         }
         let rect = self.context.launcher_rect(&self.config);
         let (id, open) = window::open(window::Settings {
@@ -496,6 +599,7 @@ impl Launcher {
             },
             ..Default::default()
         });
+        self.window_generation.fetch_add(1, Ordering::Relaxed);
         self.window = Some(id);
         let refresh = if self.loading {
             Task::none()
@@ -507,6 +611,7 @@ impl Launcher {
     }
 
     fn hide(&mut self) -> Task<Message> {
+        self.window_generation.fetch_add(1, Ordering::Relaxed);
         self.file_generation.fetch_add(1, Ordering::Relaxed);
         self.dynamic_generation = self.dynamic_generation.wrapping_add(1);
         self.dynamic_loading = false;
@@ -549,7 +654,11 @@ impl Launcher {
             return Task::none();
         }
         if self.route == "files" {
-            return Task::batch([self.search_files(), self.refresh_files(false)]);
+            return Task::batch([
+                self.focus_input(),
+                self.search_files(),
+                self.refresh_files(false),
+            ]);
         }
         self.dynamic_loading = true;
         if self.route == "updates" {
@@ -649,6 +758,7 @@ impl Launcher {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::Key(..) | Message::ExtensionShortcut(..) if self.window.is_none() => {}
             Message::UpdateChecked(manual, result) => match result {
                 Ok(release) => {
                     if self.route == "updates" {
@@ -714,19 +824,15 @@ impl Launcher {
                 return Task::batch([
                     window::gain_focus(id),
                     self.focus_input(),
-                    Task::perform(
-                        async move {
-                            tokio::time::sleep(std::time::Duration::from_millis(80)).await;
-                            tokio::task::spawn_blocking(move || {
-                                windows::place("class:^super-space$", rect)
-                                    .and_then(|_| windows::raise_launcher())
-                            })
-                            .await
-                            .map_err(|e| e.to_string())?
-                        },
-                        Message::Result,
-                    ),
+                    self.window_task(id, Some(rect), 80, true),
                 ]);
+            }
+            Message::WindowResult(id, generation, result) => {
+                if self.window == Some(id)
+                    && self.window_generation.load(Ordering::Relaxed) == generation
+                {
+                    return self.update(Message::Result(result));
+                }
             }
             Message::Show(route, toggle) => return self.show(&route, toggle),
             Message::Hide => return self.hide(),
@@ -736,25 +842,33 @@ impl Launcher {
                 if self.route == "files" {
                     self.dynamic.clear();
                 }
-                self.selected = 0;
                 self.actions = false;
-                self.rebuild();
+                let selection = if self.extension.is_some() {
+                    self.filter_extension_results()
+                } else {
+                    self.selected = 0;
+                    self.rebuild();
+                    None
+                }
+                .map_or(Task::none(), |message| self.update(message));
                 if let Some(callback) = self
                     .extension_view
                     .root()
                     .and_then(|root| root.callback("onSearchTextChange"))
                 {
-                    return self.update(Message::ExtensionInvoke(
+                    let search = self.update(Message::ExtensionInvoke(
                         callback,
                         vec![serde_json::json!(self.query)],
                     ));
+                    return Task::batch([selection, search]);
                 }
                 if self.route == "files" {
                     return self.search_files();
                 }
-                return self.load_package_preview();
+                return Task::batch([selection, self.load_package_preview()]);
             }
             Message::Move(delta) => {
+                let previous = self.extension_selection();
                 if !self.results.is_empty() {
                     self.selected = if delta >= 0 && self.extension_view.has_more() {
                         (self.selected + delta as usize).min(self.results.len() - 1)
@@ -782,8 +896,7 @@ impl Launcher {
                             }
                     };
                     let selection = self
-                        .extension_view
-                        .selection_message(self.results.get(self.selected))
+                        .extension_selection_changed(previous)
                         .map_or(Task::none(), |message| self.update(message));
                     return Task::batch([
                         selection,
@@ -801,6 +914,7 @@ impl Launcher {
                 }
             }
             Message::Activate(index) => {
+                let previous = self.extension_selection();
                 self.selected = index;
                 if self.package_operation().is_some()
                     && self
@@ -815,8 +929,7 @@ impl Launcher {
                     ]);
                 }
                 let selection = self
-                    .extension_view
-                    .selection_message(self.results.get(index))
+                    .extension_selection_changed(previous)
                     .map_or(Task::none(), |message| self.update(message));
                 return Task::batch([selection, self.activate()]);
             }
@@ -857,7 +970,8 @@ impl Launcher {
                     self.detail = None;
                 } else if !self.query.is_empty() {
                     if self.route == "files" {
-                        return self.update(Message::Query(String::new()));
+                        let search = self.update(Message::Query(String::new()));
+                        return Task::batch([self.focus_input(), search]);
                     }
                     self.query.clear();
                     self.selected = 0;
@@ -1027,7 +1141,18 @@ impl Launcher {
                         self.actions = false;
                         self.action_path.clear();
                     }
-                    return self.update(message);
+                    let task = self.update(message);
+                    return if self.window.is_some()
+                        && !self.actions
+                        && self.extension.is_none()
+                        && self.alert.is_none()
+                        && self.settings.is_none()
+                        && self.detail.is_none()
+                    {
+                        Task::batch([task, self.focus_input()])
+                    } else {
+                        task
+                    };
                 }
             }
             Message::ActionSubmenu(id) => {
@@ -1196,19 +1321,11 @@ impl Launcher {
                         != windows::monitor_rect(&self.context.monitor, true)
                 {
                     self.context.monitor = monitor.clone();
+                    self.window_generation.fetch_add(1, Ordering::Relaxed);
                     let rect = self.context.launcher_rect(&self.config);
                     return Task::batch([
                         window::resize(id, iced::Size::new(rect.width, rect.height)),
-                        Task::perform(
-                            async move {
-                                tokio::task::spawn_blocking(move || {
-                                    windows::place("class:^super-space$", rect)
-                                })
-                                .await
-                                .map_err(|e| e.to_string())?
-                            },
-                            Message::Result,
-                        ),
+                        self.window_task(id, Some(rect), 0, false),
                     ]);
                 }
             }
@@ -1371,26 +1488,11 @@ impl Launcher {
                                 self.extension_view = Default::default();
                                 return self.hide();
                             }
-                            let previous_root =
-                                self.extension_view.root().map(|node| node.id.clone());
+                            let previous_selection = self.extension_selection();
+                            let previous_root = self.extension_root();
                             self.extension_view
                                 .update(nodes, event["inputRevision"].as_u64().unwrap_or(0));
-                            let changed_root = previous_root
-                                != self.extension_view.root().map(|node| node.id.clone());
-                            if changed_root {
-                                if let Some(id) = previous_root {
-                                    self.extension_queries
-                                        .insert(id, (self.query.clone(), self.selected));
-                                }
-                                let restored = self
-                                    .extension_view
-                                    .root()
-                                    .and_then(|root| self.extension_queries.remove(&root.id))
-                                    .unwrap_or_default();
-                                self.query = restored.0;
-                                self.selected = restored.1;
-                                self.actions = false;
-                            }
+                            let changed_root = self.reconcile_extension_root(previous_root);
                             if let Some(value) = self
                                 .extension_view
                                 .root()
@@ -1411,9 +1513,25 @@ impl Launcher {
                             {
                                 self.selected = index;
                             }
-                            if changed_root {
-                                return self.focus_input();
+                            let selection = self
+                                .extension_selection_changed(previous_selection)
+                                .map_or(Task::none(), |message| self.update(message));
+                            let scroll = if changed_root {
+                                widget::operation::scroll_to(
+                                    "results",
+                                    scrollable::AbsoluteOffset {
+                                        x: 0.0,
+                                        y: self.extension_scroll_offset(),
+                                    },
+                                )
+                            } else {
+                                Task::none()
+                            };
+                            if changed_root || (!self.actions && self.extension_view.needs_focus())
+                            {
+                                return Task::batch([selection, scroll, self.focus_input()]);
                             }
+                            return Task::batch([selection, scroll]);
                         }
                         Err(e) => self.status = format!("Extension UI: {e}"),
                     },
@@ -1448,12 +1566,7 @@ impl Launcher {
                         self.extension_view = Default::default();
                         return self.hide();
                     }
-                    "pop" => {
-                        self.extension = None;
-                        self.extension_view = Default::default();
-                        self.query.clear();
-                        self.rebuild();
-                    }
+                    "pop" => return self.pop_extension(),
                     "clear-search" => {
                         self.query.clear();
                         self.rebuild();
@@ -1519,6 +1632,19 @@ impl Launcher {
                         self.status = "Extension worker stopped".into();
                     }
                     _ => {}
+                }
+            }
+            Message::ExtensionShortcut(session, key, modifiers) => {
+                // Earlier messages in this event batch must update selection and form values first.
+                if self
+                    .extension
+                    .as_ref()
+                    .is_some_and(|active| active.id == session)
+                    && let Some(message) = self
+                        .extension_shortcut(&key, modifiers)
+                        .and_then(|id| self.extension_action(&id))
+                {
+                    return self.update(message);
                 }
             }
             Message::ExtensionInvoke(callback, args) => {
@@ -1707,7 +1833,7 @@ impl Launcher {
                     }
                 }
             }
-            Message::Noop => {}
+            Message::Noop | Message::DropdownDismissed => {}
         }
         Task::none()
     }
@@ -2320,11 +2446,12 @@ impl Launcher {
         self.actions = false;
         self.status.clear();
         self.rebuild();
-        if self.route == "files" {
+        let refresh = if self.route == "files" {
             self.search_files()
         } else {
             self.load_package_preview()
-        }
+        };
+        Task::batch([refresh, self.focus_input()])
     }
 
     fn entry_action(&mut self, operation: &str) -> Task<Message> {
@@ -2627,12 +2754,6 @@ impl Launcher {
                 return self.update(Message::PackageTogglePreview);
             }
         }
-        if self.extension.is_some() {
-            let selected = self.results.get(self.selected).map(|e| e.id.as_str());
-            if let Some(action) = self.extension_view.shortcut(selected, &key, modifiers) {
-                return self.update(self.extension_view.action_message(action));
-            }
-        }
         let is_form = self.extension_view.root().is_some_and(|n| n.kind == "Form");
         if is_form && key == Key::Named(Named::Tab) {
             return self
@@ -2702,33 +2823,45 @@ impl Launcher {
         self.colors.theme()
     }
 
+    fn extension_shortcut(&self, key: &Key, modifiers: keyboard::Modifiers) -> Option<String> {
+        if self.alert.is_some() || self.actions || self.settings.is_some() {
+            return None;
+        }
+        let selected = self
+            .results
+            .get(self.selected)
+            .map(|entry| entry.id.as_str());
+        self.extension_view
+            .shortcut(selected, key, modifiers)
+            .map(|action| action.id.clone())
+    }
+
+    fn extension_action(&self, id: &str) -> Option<Message> {
+        self.extension_view
+            .find(id)
+            .filter(|node| matches!(node.kind.as_str(), "Action" | "Action.SubmitForm"))
+            .map(|action| self.extension_view.action_message(action))
+    }
+
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
             super::ipc::subscription(),
             super::extensions::subscription(),
             iced::time::every(std::time::Duration::from_secs(2)).map(|_| Message::Tick),
             window::close_requests().map(|_| Message::Hide),
-            iced::event::listen_with(|event, status, _id| {
-                if let iced::Event::Keyboard(keyboard::Event::KeyPressed {
-                    key, modifiers, ..
-                }) = event
-                {
-                    if key == Key::Named(Named::Enter) && status == iced::event::Status::Captured {
-                        return None;
-                    }
-                    Some(Message::Key(
-                        key,
-                        modifiers,
-                        status == iced::event::Status::Captured,
-                    ))
-                } else {
-                    None
-                }
-            }),
         ])
     }
 
     pub fn view(&self, _id: window::Id) -> Element<'_, Message> {
+        super::dropdown::scope(self.view_content(), |key, modifiers| {
+            self.extension.as_ref().and_then(|session| {
+                self.extension_shortcut(key, modifiers)
+                    .map(|_| Message::ExtensionShortcut(session.id, key.clone(), modifiers))
+            })
+        })
+    }
+
+    fn view_content(&self) -> Element<'_, Message> {
         let colors = self.colors;
         let context_placeholder = if self.route == "hidden" {
             "Search hidden actions…".into()
@@ -3288,6 +3421,26 @@ fn default_open_command(path: &str) -> Command {
     command
 }
 
+async fn run_window_operation(
+    generation: Arc<AtomicU64>,
+    request: u64,
+    delay_ms: u64,
+    operation: impl FnOnce() -> Result<(), String> + Send + 'static,
+) -> Result<(), String> {
+    if delay_ms != 0 {
+        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+    }
+    tokio::task::spawn_blocking(move || {
+        if generation.load(Ordering::Relaxed) == request {
+            operation()
+        } else {
+            Ok(())
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
 fn execute_action(action: Action, paste: bool) -> Result<(), String> {
     let mut process = match action {
         Action::Shell(command) => {
@@ -3407,6 +3560,369 @@ mod tests {
         )
     }
 
+    fn form_fields(fields: &[(&str, bool, bool)]) -> Vec<super::super::extensions::Node> {
+        serde_json::from_value(serde_json::json!([{
+            "id": "form", "type": "Form", "children": fields.iter().map(|(id, disabled, autofocus)| {
+                serde_json::json!({
+                    "id": format!("node-{id}"), "type": "Form.TextField",
+                    "props": {"id": id, "disabled": disabled, "autoFocus": autofocus}
+                })
+            }).collect::<Vec<_>>()
+        }]))
+        .unwrap()
+    }
+
+    #[test]
+    fn automatic_form_focus_is_committed_before_a_later_explicit_focus_command() {
+        let mut launcher = launcher("root");
+        launcher.extension_view.update(
+            form_fields(&[
+                ("disabled", true, true),
+                ("first", false, false),
+                ("preferred", false, true),
+                ("explicit", false, false),
+            ]),
+            0,
+        );
+        let automatic = launcher.focus_form_input();
+        assert_eq!(launcher.extension_view.focused, "preferred");
+        launcher.actions = true;
+        let explicit = launcher.update(Message::ExtensionFocus("explicit".into()));
+        assert_eq!(launcher.extension_view.focused, "explicit");
+        assert!(launcher.actions);
+        drop(automatic);
+        drop(explicit);
+        let _ = launcher.focus_form_input();
+        assert_eq!(launcher.extension_view.focused, "explicit");
+    }
+
+    #[test]
+    fn restored_form_controls_accept_explicit_focus_after_synchronous_fallback() {
+        let mut launcher = launcher("root");
+        launcher.extension_view.update(
+            form_fields(&[("removed", false, false), ("next", false, false)]),
+            0,
+        );
+        let _ = launcher.focus_form_input();
+        assert_eq!(launcher.extension_view.focused, "removed");
+        launcher.extension_view.update(form_fields(&[]), 0);
+        assert!(launcher.extension_view.focused.is_empty());
+        assert_eq!(launcher.focus_form_input().units(), 0);
+        launcher.extension_view.update(
+            form_fields(&[("next", false, false), ("explicit", false, false)]),
+            0,
+        );
+        let fallback = launcher.focus_form_input();
+        assert_eq!(launcher.extension_view.focused, "next");
+        let _ = launcher.update(Message::ExtensionFocus("explicit".into()));
+        let _ = launcher.update(Message::ExtensionFocus("removed".into()));
+        drop(fallback);
+        assert_eq!(launcher.extension_view.focused, "explicit");
+    }
+
+    #[test]
+    fn popping_an_extension_recreates_search_and_schedules_focus_before_typing() {
+        for kind in ["Detail", "Form", "List"] {
+            let mut launcher = launcher("root");
+            let window = launcher.window;
+            launcher.catalog.apps.push(package("apps", "Browser"));
+            launcher.query = "Validate Browser".into();
+            let mut nodes = form_fields(&[("name", false, true)]);
+            nodes[0].kind = kind.into();
+            launcher.extension_view.update(nodes, 0);
+            launcher.extension_view.focused = "name".into();
+
+            let focus = launcher.pop_extension();
+
+            assert_eq!(focus.units(), 1, "{kind} must focus the recreated search");
+            assert!(launcher.extension.is_none());
+            assert!(launcher.extension_view.nodes.is_empty());
+            assert!(launcher.extension_view.focused.is_empty());
+            assert!(launcher.query.is_empty());
+            assert_eq!(launcher.window, window);
+            let _ = launcher.update(Message::Query("Browser".into()));
+            assert_eq!(launcher.query, "Browser");
+            assert!(
+                launcher
+                    .results
+                    .iter()
+                    .any(|entry| entry.title == "Browser")
+            );
+        }
+    }
+
+    #[test]
+    fn extension_shortcuts_resolve_latest_form_values_and_yield_to_modal_controls() {
+        let mut launcher = launcher("root");
+        let nodes = serde_json::from_value(serde_json::json!([{
+            "id": "form", "type": "Form", "children": [{
+                "id": "actions", "type": "ActionPanel", "children": [{
+                    "id": "save", "type": "Action.SubmitForm", "props": {
+                        "title": "Save", "onAction": {"$callback": "save"},
+                        "shortcut": {"key": "v", "modifiers": ["ctrl", "shift"]}
+                    }
+                }]
+            }, {
+                "id": "name", "type": "Form.TextField", "props": {
+                    "id": "name", "value": "current value"
+                }
+            }]
+        }]))
+        .unwrap();
+        launcher.extension_view.update(nodes, 0);
+        let key = Key::Character("V".into());
+        let modifiers = keyboard::Modifiers::CTRL | keyboard::Modifiers::SHIFT;
+        let action = launcher.extension_shortcut(&key, modifiers).unwrap();
+        assert_eq!(action, "save");
+        let _ = launcher.update(Message::ExtensionField(
+            "name".into(),
+            serde_json::json!("latest typed value"),
+            None,
+        ));
+        assert!(matches!(
+            launcher.extension_action(&action),
+            Some(Message::ExtensionInvoke(callback, values))
+                if callback == "save" && values == vec![serde_json::json!({"name": "latest typed value"})]
+        ));
+        assert!(
+            launcher
+                .extension_shortcut(&key, keyboard::Modifiers::CTRL)
+                .is_none()
+        );
+        launcher.actions = true;
+        assert!(launcher.extension_shortcut(&key, modifiers).is_none());
+        launcher.actions = false;
+        launcher.alert = Some(("confirm".into(), serde_json::json!({})));
+        assert!(launcher.extension_shortcut(&key, modifiers).is_none());
+        launcher.alert = None;
+        launcher.settings = Some(super::super::settings::Editor::new(&launcher.config));
+        assert!(launcher.extension_shortcut(&key, modifiers).is_none());
+    }
+
+    #[test]
+    fn extension_shortcuts_resolve_selection_after_earlier_queued_navigation() {
+        let mut launcher = launcher("root");
+        let items = ["alpha", "beta"].map(|id| {
+            serde_json::json!({
+                "id": id, "type": "List.Item", "props": {"id": id, "title": id},
+                "children": [{
+                    "id": format!("panel-{id}"), "type": "ActionPanel", "children": [{
+                        "id": format!("save-{id}"), "type": "Action", "props": {
+                            "onAction": {"$callback": format!("save-{id}")},
+                            "shortcut": {"key": "v", "modifiers": ["ctrl", "shift"]}
+                        }
+                    }]
+                }]
+            })
+        });
+        let nodes = serde_json::from_value(serde_json::json!([{
+            "id": "list", "type": "List", "children": items
+        }]))
+        .unwrap();
+        launcher.extension_view.update(nodes, 0);
+        launcher.results = launcher.extension_view.entries("");
+        let key = Key::Character("V".into());
+        let modifiers = keyboard::Modifiers::CTRL | keyboard::Modifiers::SHIFT;
+        assert_eq!(
+            launcher.extension_shortcut(&key, modifiers).as_deref(),
+            Some("save-alpha")
+        );
+        let _ = launcher.update(Message::Move(1));
+        assert!(matches!(
+            launcher.extension_shortcut(&key, modifiers)
+                .and_then(|id| launcher.extension_action(&id)),
+            Some(Message::ExtensionInvoke(callback, values))
+                if callback == "save-beta" && values.is_empty()
+        ));
+    }
+
+    fn selection_grid(
+        root: &str,
+        callback: &str,
+        ids: &[&str],
+    ) -> Vec<super::super::extensions::Node> {
+        serde_json::from_value(serde_json::json!([{
+            "id": root, "type": "Grid", "props": {
+                "onSelectionChange": {"$callback": callback}
+            }, "children": ids.iter().map(|id| serde_json::json!({
+                "id": format!("node-{id}"), "type": "Grid.Item",
+                "props": {"id": id, "title": id}
+            })).collect::<Vec<_>>()
+        }]))
+        .unwrap()
+    }
+
+    #[test]
+    fn filtering_grid_results_notifies_changed_selection_once_including_empty_results() {
+        let mut launcher = launcher("root");
+        launcher.extension_view.update(
+            selection_grid("grid", "selected", &["alpha", "beta", "gamma", "delta"]),
+            0,
+        );
+        launcher.results = launcher.extension_view.entries("");
+        launcher.selected = 3;
+        for (query, expected) in [
+            ("beta", Some(serde_json::json!("beta"))),
+            ("bet", None),
+            ("missing", Some(serde_json::Value::Null)),
+            ("still missing", None),
+            ("", Some(serde_json::json!("alpha"))),
+        ] {
+            launcher.query = query.into();
+            let message = launcher.filter_extension_results();
+            match expected {
+                Some(expected) => assert!(matches!(
+                    message,
+                    Some(Message::ExtensionInvoke(callback, values))
+                        if callback == "selected" && values == vec![expected]
+                )),
+                None => assert!(message.is_none(), "duplicate selection for {query:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn render_selection_changes_compare_item_identity_without_repeating_new_callbacks() {
+        let mut launcher = launcher("root");
+        launcher.extension_view.update(
+            selection_grid("grid", "old-callback", &["alpha", "beta"]),
+            0,
+        );
+        launcher.results = launcher.extension_view.entries("");
+        launcher.selected = 1;
+        let previous = launcher.extension_selection();
+        launcher
+            .extension_view
+            .update(selection_grid("grid", "new-callback", &["beta"]), 0);
+        launcher.results = launcher.extension_view.entries("");
+        launcher.selected = 0;
+        assert!(launcher.extension_selection_changed(previous).is_none());
+        let previous = launcher.extension_selection();
+        launcher
+            .extension_view
+            .update(selection_grid("grid", "latest-callback", &["alpha"]), 0);
+        launcher.results = launcher.extension_view.entries("");
+        assert!(matches!(
+            launcher.extension_selection_changed(previous),
+            Some(Message::ExtensionInvoke(callback, values))
+                if callback == "latest-callback" && values == vec![serde_json::json!("alpha")]
+        ));
+        let previous = launcher.extension_selection();
+        launcher.extension_view.update(
+            selection_grid("other-grid", "other-callback", &["alpha"]),
+            0,
+        );
+        launcher.results = launcher.extension_view.entries("");
+        assert!(launcher.extension_selection_changed(previous).is_some());
+    }
+
+    #[test]
+    fn text_input_escape_clears_search_then_navigates_back_even_when_captured() {
+        let mut launcher = launcher("nested");
+        launcher.query = "current query".into();
+        launcher
+            .stack
+            .push(("root".into(), "previous query".into(), 0));
+        let window = launcher.window;
+        let dismissed = launcher.update(Message::DropdownDismissed);
+        assert_eq!(dismissed.units(), 0);
+        assert_eq!(launcher.query, "current query");
+        let captured = launcher.update(Message::Key(
+            Key::Named(Named::Escape),
+            keyboard::Modifiers::empty(),
+            true,
+        ));
+        assert_eq!(captured.units(), 1);
+        assert!(launcher.query.is_empty());
+        assert_eq!(launcher.route, "nested");
+        assert_eq!(launcher.stack.len(), 1);
+        assert_eq!(launcher.window, window);
+        let _ = launcher.update(Message::Key(
+            Key::Named(Named::Escape),
+            keyboard::Modifiers::empty(),
+            true,
+        ));
+        assert_eq!(launcher.route, "root");
+        assert!(launcher.stack.is_empty());
+        assert_eq!(launcher.query, "previous query");
+        assert_eq!(launcher.window, window);
+        let _ = launcher.update(Message::Key(
+            Key::Named(Named::Escape),
+            keyboard::Modifiers::empty(),
+            false,
+        ));
+        assert!(launcher.query.is_empty());
+        assert_eq!(launcher.window, window);
+        let _ = launcher.update(Message::Key(
+            Key::Named(Named::Escape),
+            keyboard::Modifiers::empty(),
+            false,
+        ));
+        assert!(launcher.window.is_none());
+    }
+
+    #[test]
+    fn queued_keys_after_back_hides_the_window_cannot_reopen_actions() {
+        let mut launcher = launcher("root");
+        let _ = launcher.update(Message::Back);
+        assert!(launcher.window.is_none());
+        for message in [
+            Message::Key(Key::Character("k".into()), keyboard::Modifiers::CTRL, false),
+            Message::Key(
+                Key::Named(Named::Enter),
+                keyboard::Modifiers::empty(),
+                false,
+            ),
+            Message::ExtensionShortcut(1, Key::Character("v".into()), keyboard::Modifiers::CTRL),
+        ] {
+            assert_eq!(launcher.update(message).units(), 0);
+            assert!(launcher.window.is_none());
+            assert!(!launcher.actions);
+            assert!(launcher.query.is_empty());
+        }
+    }
+
+    #[test]
+    fn semantic_results_root_changes_reset_selection_and_scroll_without_losing_navigation() {
+        let mut launcher = launcher("root");
+        let mut list = selection_grid("list-page", "selected", &["alpha", "beta"]);
+        list[0].kind = "List".into();
+        launcher.extension_view.update(list.clone(), 0);
+        launcher.query = "saved query".into();
+        launcher.selected = 35;
+        let previous = launcher.extension_root();
+        launcher.extension_view.update(
+            selection_grid("grid-page", "selected", &["alpha", "beta"]),
+            0,
+        );
+        assert!(launcher.reconcile_extension_root(previous));
+        launcher.results = launcher.extension_view.entries("");
+        assert_eq!(launcher.selected, 0);
+        assert!(launcher.query.is_empty());
+        assert_eq!(launcher.extension_scroll_offset(), 0.0);
+
+        let previous = launcher.extension_root();
+        launcher.extension_view.update(list, 0);
+        assert!(launcher.reconcile_extension_root(previous));
+        assert_eq!(launcher.selected, 35);
+        assert_eq!(launcher.query, "saved query");
+        assert_eq!(launcher.extension_scroll_offset(), 32.0 * 46.0);
+        let previous = launcher.extension_root();
+        assert!(!launcher.reconcile_extension_root(previous));
+        assert_eq!(launcher.selected, 35);
+
+        let previous = launcher.extension_root();
+        launcher.extension_view.update(
+            selection_grid("list-page", "selected", &["alpha", "beta"]),
+            0,
+        );
+        assert!(launcher.reconcile_extension_root(previous));
+        launcher.results = launcher.extension_view.entries("");
+        assert_eq!(launcher.selected, 0);
+        assert!(launcher.query.is_empty());
+        assert_eq!(launcher.extension_scroll_offset(), 0.0);
+    }
+
     #[test]
     fn startup_defers_providers_and_rejects_late_empty_results() {
         let mut launcher = launcher("install.package");
@@ -3515,7 +4031,7 @@ mod tests {
     fn file_search_does_not_schedule_a_competing_empty_provider() {
         let mut launcher = launcher("files");
         launcher.loading = false;
-        assert_eq!(launcher.load_dynamic().units(), 2);
+        assert_eq!(launcher.load_dynamic().units(), 3);
         assert!(launcher.dynamic_loading);
         assert!(launcher.file_indexing);
         let _ = launcher.update(Message::Dynamic(
@@ -3524,6 +4040,31 @@ mod tests {
             vec![],
         ));
         assert!(launcher.dynamic_loading);
+    }
+
+    #[test]
+    fn files_back_refocuses_search_after_clearing_and_restoring_a_query() {
+        let mut launcher = launcher("files");
+        launcher.loading = false;
+        launcher.file_indexing = true;
+        launcher.query = "reports".into();
+        let previous = launcher.file_generation.load(Ordering::Relaxed);
+
+        let clear = launcher.update(Message::Back);
+        assert_eq!(clear.units(), 2);
+        assert!(launcher.query.is_empty());
+        assert_eq!(launcher.route, "files");
+        assert!(launcher.file_generation.load(Ordering::Relaxed) > previous);
+        assert!(launcher.dynamic_loading);
+
+        launcher.route = "nested".into();
+        launcher.stack.push(("files".into(), "reports".into(), 0));
+        let restore = launcher.update(Message::Back);
+        assert_eq!(restore.units(), 2);
+        assert_eq!(launcher.route, "files");
+        assert_eq!(launcher.query, "reports");
+        assert!(launcher.dynamic_loading);
+        assert!(launcher.window.is_some());
     }
 
     #[test]
@@ -3648,6 +4189,65 @@ mod tests {
         assert!(launcher.file_indexing);
     }
 
+    #[tokio::test]
+    async fn delayed_window_operations_are_cancelled_when_the_launcher_hides() {
+        let mut launcher = launcher("root");
+        let generation = Arc::clone(&launcher.window_generation);
+        let request = generation.load(Ordering::Relaxed);
+        let started = Arc::new(AtomicU64::new(0));
+        let calls = Arc::clone(&started);
+        let pending = tokio::spawn(run_window_operation(generation, request, 20, move || {
+            calls.fetch_add(1, Ordering::Relaxed);
+            Err("stale operation ran".into())
+        }));
+        tokio::task::yield_now().await;
+        let _ = launcher.hide();
+        assert_eq!(pending.await.unwrap(), Ok(()));
+        assert_eq!(started.load(Ordering::Relaxed), 0);
+
+        let generation = Arc::clone(&launcher.window_generation);
+        let request = generation.load(Ordering::Relaxed);
+        let result = run_window_operation(generation, request, 0, || {
+            Err("current operation failed".into())
+        })
+        .await;
+        assert_eq!(result, Err("current operation failed".into()));
+    }
+
+    #[test]
+    fn stale_window_results_do_not_clear_status_or_report_errors_after_reopening() {
+        let mut launcher = launcher("root");
+        let previous = launcher.window.unwrap();
+        let generation = launcher.window_generation.load(Ordering::Relaxed);
+        let _ = launcher.hide();
+        launcher.status = "Preserve current status".into();
+        let _ = launcher.update(Message::WindowResult(
+            previous,
+            generation,
+            Err("stale error".into()),
+        ));
+        assert_eq!(launcher.status, "Preserve current status");
+
+        let current = window::Id::unique();
+        launcher.window = Some(current);
+        let _ = launcher.update(Message::WindowResult(previous, generation, Ok(())));
+        let _ = launcher.update(Message::WindowResult(
+            current,
+            generation,
+            Err("stale placement".into()),
+        ));
+        assert_eq!(launcher.status, "Preserve current status");
+        let generation = launcher.window_generation.load(Ordering::Relaxed);
+        let _ = launcher.update(Message::WindowResult(
+            current,
+            generation,
+            Err("current failure".into()),
+        ));
+        assert_eq!(launcher.status, "current failure");
+        let _ = launcher.update(Message::WindowResult(current, generation, Ok(())));
+        assert!(launcher.status.is_empty());
+    }
+
     #[test]
     fn hide_controls_use_restore_actions_and_reject_pending_file_results() {
         let mut launcher = launcher("files");
@@ -3671,7 +4271,9 @@ mod tests {
         );
         let pending = launcher.file_generation.load(Ordering::Relaxed);
         launcher.config.blacklist.push(entry.id.clone());
-        assert_eq!(launcher.hidden_actions_changed().units(), 1);
+        launcher.actions = true;
+        assert_eq!(launcher.hidden_actions_changed().units(), 2);
+        assert!(!launcher.actions);
         assert!(launcher.results.is_empty());
         let _ = launcher.update(Message::Files(
             pending,
@@ -3688,6 +4290,38 @@ mod tests {
         assert!(
             matches!(&launcher.results[0].action, Action::Builtin(name) if name == "unhide:file:/tmp/report.txt")
         );
+        launcher.config.blacklist.clear();
+        assert_eq!(launcher.hidden_actions_changed().units(), 1);
+        assert!(launcher.results.is_empty());
+        assert!(launcher.window.is_some());
+    }
+
+    #[test]
+    fn native_action_panel_completion_restores_focus_without_focusing_behind_a_confirmation() {
+        let mut launcher = launcher("root");
+        launcher.results = vec![package("apps", "Browser")];
+        launcher.actions = true;
+        let window = launcher.window;
+        let copy = launcher
+            .panel_items()
+            .iter()
+            .position(|(_, message)| matches!(message, Message::CopyTitle))
+            .unwrap();
+        let task = launcher.update(Message::ActionChoice(copy));
+        assert_eq!(task.units(), 2);
+        assert!(!launcher.actions);
+        assert_eq!(launcher.window, window);
+
+        launcher.route = "clipboard".into();
+        launcher.actions = true;
+        let clear = launcher.panel_items().iter().position(|(_, message)| {
+            matches!(message, Message::EntryAction(operation) if operation == "clear-clipboard")
+        }).unwrap();
+        let task = launcher.update(Message::ActionChoice(clear));
+        assert_eq!(task.units(), 0);
+        assert!(!launcher.actions);
+        assert!(launcher.alert.is_some());
+        assert_eq!(launcher.window, window);
     }
 
     #[test]

@@ -14,7 +14,7 @@ export default function Command() {
       const markdown = await BrowserExtension.getContent({tabId:tab.id,format:"markdown"});
       await LocalStorage.setItem("browser", {tab:tab.title,text,html,markdown});
       setMarkdown(`# Browser connected\n\n${markdown}\n\nText and HTML extraction also completed.`);
-    })().catch(error => setMarkdown(error.message));
+    })().catch((error: unknown) => setMarkdown(error instanceof Error ? error.message : String(error)));
   }, []);
   return <Detail markdown={markdown}/>;
 }

@@ -1,6 +1,6 @@
 import { Form } from "@raycast/api";
 import { useWorkflow, WorkflowActions, confirmReplacement, run } from "./components";
-import { tuiArguments, desktopPath } from "./workflows.mjs";
+import { tuiArguments, desktopPath } from "./workflows.ts";
 
 export default function InstallTUI() {
   const workflow = useWorkflow();

@@ -1,6 +1,6 @@
 import { Form } from "@raycast/api";
 import { useWorkflow, WorkflowActions, FileField, run } from "./components";
-import { selectedPaths } from "./workflows.mjs";
+import { selectedPaths } from "./workflows.ts";
 
 export function Share({ directory = false }) {
   const workflow = useWorkflow();

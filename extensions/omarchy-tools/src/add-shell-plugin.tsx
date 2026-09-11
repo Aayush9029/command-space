@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Form, confirmAlert } from "@raycast/api";
 import { useWorkflow, WorkflowActions } from "./components";
-import { addShellPlugin, plainText } from "./workflows.mjs";
+import { addShellPlugin, plainText } from "./workflows.ts";
 
 export default function AddShellPlugin() {
   const workflow = useWorkflow();

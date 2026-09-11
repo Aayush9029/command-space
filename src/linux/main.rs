@@ -5,6 +5,7 @@ mod catalog;
 mod clipboard;
 mod deeplink;
 mod desktop;
+mod dropdown;
 mod extension_image;
 mod extension_view;
 mod extensions;

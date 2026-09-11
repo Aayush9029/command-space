@@ -1,6 +1,6 @@
 import { Form } from "@raycast/api";
 import { useWorkflow, WorkflowActions } from "./components";
-import { configureDNS } from "./system-workflows.mjs";
+import { configureDNS } from "./system-workflows.ts";
 
 export default function CustomDNS() {
   const workflow = useWorkflow();

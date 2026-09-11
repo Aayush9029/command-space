@@ -1,16 +1,17 @@
+import { errorMessage } from "./workflows.ts";
 import { useEffect, useState } from "react";
 import { Form, Toast, showToast } from "@raycast/api";
 import { useWorkflow, WorkflowActions } from "./components";
-import { readBranding, writeBranding } from "./branding.mjs";
+import { readBranding, writeBranding, type BrandingTarget } from "./branding.ts";
 
-export function BrandingText({ target = "about" }) {
+export function BrandingText({ target = "about" }: { target?: BrandingTarget }) {
   const workflow = useWorkflow();
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let active = true;
     readBranding(target).then(value => { if (active) setContent(value); })
-      .catch(error => showToast({ style: Toast.Style.Failure, title: "Could not read branding", message: error.message }))
+      .catch(error => showToast({ style: Toast.Style.Failure, title: "Could not read branding", message: errorMessage(error) }))
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [target]);

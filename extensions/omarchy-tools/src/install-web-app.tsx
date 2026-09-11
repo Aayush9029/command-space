@@ -1,6 +1,6 @@
 import { Form } from "@raycast/api";
 import { useWorkflow, WorkflowActions, confirmReplacement, run } from "./components";
-import { webAppArguments, desktopPath } from "./workflows.mjs";
+import { webAppArguments, desktopPath } from "./workflows.ts";
 
 export default function InstallWebApp() {
   const workflow = useWorkflow();

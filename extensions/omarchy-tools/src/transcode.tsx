@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Form } from "@raycast/api";
 import { useWorkflow, WorkflowActions, FileField, run } from "./components";
-import { mediaKind, selectedPaths, transcodeArguments } from "./workflows.mjs";
+import { errorMessage, mediaKind, selectedPaths, transcodeArguments } from "./workflows.ts";
 
 export default function Transcode() {
   const workflow = useWorkflow();
@@ -26,7 +26,7 @@ export default function Transcode() {
       setKind(type);
       setFormat(type === "image" ? "jpg" : "mp4");
       setResolution(type === "image" ? "high" : "1080p");
-    } catch (error) { if (!controller.signal.aborted) setFileError(error.message); }
+    } catch (error) { if (!controller.signal.aborted) setFileError(errorMessage(error)); }
   }
   return <Form navigationTitle="Transcode Media" isLoading={workflow.busy} actions={<WorkflowActions title="Convert" workflow={workflow}
     onSubmit={values => workflow.submit("Converted and copied", async signal => {

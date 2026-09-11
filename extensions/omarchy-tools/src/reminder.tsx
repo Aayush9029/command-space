@@ -1,6 +1,6 @@
 import { Form } from "@raycast/api";
 import { useWorkflow, WorkflowActions, run } from "./components";
-import { reminderArguments } from "./workflows.mjs";
+import { reminderArguments } from "./workflows.ts";
 
 export default function Reminder() {
   const workflow = useWorkflow();

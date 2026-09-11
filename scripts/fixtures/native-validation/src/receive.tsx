@@ -1,6 +1,13 @@
 import {LocalStorage, environment, showHUD} from "@raycast/api";
 
-export default async function Command(props) {
+interface ReceiverProps {
+  arguments?: Record<string, string>;
+  launchType?: string;
+  fallbackText?: string;
+  launchContext?: { date: Date; buffer: Buffer };
+}
+
+export default async function Command(props: ReceiverProps) {
   if (!props.launchContext) return;
   const launches = Number(await LocalStorage.getItem("receiverLaunches") || 0) + 1;
   await LocalStorage.setItem("receiverLaunches", launches);

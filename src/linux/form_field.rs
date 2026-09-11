@@ -1,9 +1,12 @@
 use super::app::Message;
 use iced::advanced::{
     Clipboard, Layout, Shell, Widget, layout, overlay, renderer,
-    widget::{Id, Operation, Tree, operate, operation},
+    widget::{Id, Operation, Tree, operate, operation, tree},
 };
 use iced::{Element, Event, Length, Rectangle, Size, Vector, keyboard, mouse};
+
+mod rows;
+pub use rows::column;
 
 pub fn reveal(id: String) -> iced::Task<Message> {
     operate(LocateField {
@@ -67,10 +70,16 @@ impl Operation<operation::scrollable::AbsoluteOffset> for LocateField {
     }
 }
 
-pub fn wrap<'a>(id: String, focused: bool, content: Element<'a, Message>) -> Element<'a, Message> {
+pub fn wrap<'a>(
+    id: String,
+    focused: bool,
+    enabled: bool,
+    content: Element<'a, Message>,
+) -> Element<'a, Message> {
     Element::new(Field {
         id,
         focused,
+        enabled,
         content,
     })
 }
@@ -78,15 +87,34 @@ pub fn wrap<'a>(id: String, focused: bool, content: Element<'a, Message>) -> Ele
 struct Field<'a> {
     id: String,
     focused: bool,
+    enabled: bool,
     content: Element<'a, Message>,
 }
 
+struct State {
+    enabled: bool,
+}
+
 impl Widget<Message, iced::Theme, iced::Renderer> for Field<'_> {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<State>()
+    }
+    fn state(&self) -> tree::State {
+        tree::State::new(State {
+            enabled: self.enabled,
+        })
+    }
     fn children(&self) -> Vec<Tree> {
         vec![Tree::new(&self.content)]
     }
     fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(std::slice::from_ref(&self.content));
+        let state = tree.state.downcast_mut::<State>();
+        if state.enabled != self.enabled {
+            state.enabled = self.enabled;
+            tree.children = self.children();
+        } else {
+            tree.diff_children(std::slice::from_ref(&self.content));
+        }
     }
     fn size(&self) -> Size<Length> {
         self.content.as_widget().size()
@@ -108,6 +136,9 @@ impl Widget<Message, iced::Theme, iced::Renderer> for Field<'_> {
         renderer: &iced::Renderer,
         operation: &mut dyn Operation,
     ) {
+        if !self.enabled {
+            return;
+        }
         operation.container(
             Some(&Id::from(format!("form-row:{}", self.id))),
             layout.bounds(),
@@ -127,6 +158,9 @@ impl Widget<Message, iced::Theme, iced::Renderer> for Field<'_> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
+        if !self.enabled {
+            return;
+        }
         if self.focused
             && matches!(
                 event,
@@ -188,6 +222,9 @@ impl Widget<Message, iced::Theme, iced::Renderer> for Field<'_> {
         viewport: &Rectangle,
         renderer: &iced::Renderer,
     ) -> mouse::Interaction {
+        if !self.enabled {
+            return mouse::Interaction::None;
+        }
         self.content.as_widget().mouse_interaction(
             &tree.children[0],
             layout,
@@ -204,6 +241,9 @@ impl Widget<Message, iced::Theme, iced::Renderer> for Field<'_> {
         viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, Message, iced::Theme, iced::Renderer>> {
+        if !self.enabled {
+            return None;
+        }
         self.content.as_widget_mut().overlay(
             &mut tree.children[0],
             layout,
@@ -211,5 +251,201 @@ impl Widget<Message, iced::Theme, iced::Renderer> for Field<'_> {
             viewport,
             translation,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iced::advanced::{clipboard, text};
+    use iced::{Font, Pixels, widget::text_input};
+
+    type InputState = text_input::State<<iced::Renderer as text::Renderer>::Paragraph>;
+
+    struct TextField {
+        field: Element<'static, Message>,
+        tree: Tree,
+        renderer: iced::Renderer,
+        node: layout::Node,
+    }
+
+    impl TextField {
+        fn new(enabled: bool) -> Self {
+            let mut field = Self::element(enabled);
+            let mut tree = Tree::new(&field);
+            let renderer = iced::Renderer::new(Font::DEFAULT, Pixels(14.));
+            let node = field.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &layout::Limits::new(Size::ZERO, Size::new(240., 60.)),
+            );
+            Self {
+                field,
+                tree,
+                renderer,
+                node,
+            }
+        }
+
+        fn element(enabled: bool) -> Element<'static, Message> {
+            wrap(
+                "name".into(),
+                false,
+                enabled,
+                text_input("Name", "")
+                    .id(Id::from("field:name"))
+                    .on_input(|value| {
+                        Message::ExtensionField(
+                            "name".into(),
+                            serde_json::json!(value),
+                            Some("changed".into()),
+                        )
+                    })
+                    .into(),
+            )
+        }
+
+        fn rebuild(&mut self, enabled: bool) {
+            self.field = Self::element(enabled);
+            self.tree.diff(&self.field);
+            self.node = self.field.as_widget_mut().layout(
+                &mut self.tree,
+                &self.renderer,
+                &layout::Limits::new(Size::ZERO, Size::new(240., 60.)),
+            );
+        }
+
+        fn update(&mut self, event: Event) -> Vec<Message> {
+            let mut messages = Vec::new();
+            let bounds = self.node.bounds();
+            self.field.as_widget_mut().update(
+                &mut self.tree,
+                &event,
+                Layout::new(&self.node),
+                mouse::Cursor::Available(bounds.center()),
+                &self.renderer,
+                &mut clipboard::Null,
+                &mut Shell::new(&mut messages),
+                &bounds,
+            );
+            messages
+        }
+
+        fn click(&mut self) -> Vec<Message> {
+            let messages = self.update(Event::Mouse(mouse::Event::ButtonPressed(
+                mouse::Button::Left,
+            )));
+            assert!(
+                self.update(Event::Mouse(mouse::Event::ButtonReleased(
+                    mouse::Button::Left,
+                )))
+                .is_empty()
+            );
+            messages
+        }
+
+        fn type_a(&mut self) -> Vec<Message> {
+            self.update(Event::Keyboard(keyboard::Event::KeyPressed {
+                key: keyboard::Key::Character("a".into()),
+                modified_key: keyboard::Key::Character("a".into()),
+                physical_key: keyboard::key::Physical::Code(keyboard::key::Code::KeyA),
+                location: keyboard::Location::Standard,
+                modifiers: keyboard::Modifiers::empty(),
+                text: Some("a".into()),
+                repeat: false,
+            }))
+        }
+
+        fn is_focused(&self) -> bool {
+            self.tree.children[0]
+                .state
+                .downcast_ref::<InputState>()
+                .is_focused()
+        }
+
+        fn focus(&mut self) {
+            self.field.as_widget_mut().operate(
+                &mut self.tree,
+                Layout::new(&self.node),
+                &self.renderer,
+                &mut operation::focusable::focus::<()>(Id::from("field:name")),
+            );
+        }
+    }
+
+    #[test]
+    fn disabled_text_field_rejects_mouse_focus_and_keyboard_input() {
+        let mut field = TextField::new(false);
+        assert!(field.click().is_empty());
+        assert!(!field.is_focused());
+        assert!(field.type_a().is_empty());
+
+        let bounds = field.node.bounds();
+        assert_eq!(
+            field.field.as_widget().mouse_interaction(
+                &field.tree,
+                Layout::new(&field.node),
+                mouse::Cursor::Available(bounds.center()),
+                &bounds,
+                &field.renderer,
+            ),
+            mouse::Interaction::None,
+        );
+    }
+
+    #[test]
+    fn queued_focus_operation_cannot_refocus_a_disabled_text_field() {
+        let mut field = TextField::new(true);
+        field.focus();
+        assert!(field.is_focused());
+
+        field.rebuild(false);
+        assert!(!field.is_focused());
+        field.focus();
+        assert!(!field.is_focused());
+        assert!(field.type_a().is_empty());
+
+        field.rebuild(true);
+        assert!(!field.is_focused());
+        field.focus();
+        assert!(field.is_focused());
+    }
+
+    #[test]
+    fn disabling_a_focused_text_field_clears_native_focus_until_clicked_again() {
+        let mut field = TextField::new(true);
+        assert!(matches!(
+            field.click().as_slice(),
+            [Message::ExtensionFocus(id)] if id == "name"
+        ));
+        assert!(field.is_focused());
+
+        field.rebuild(true);
+        assert!(field.is_focused());
+        assert!(matches!(
+            field.type_a().as_slice(),
+            [Message::ExtensionField(id, value, Some(callback))]
+                if id == "name" && value == "a" && callback == "changed"
+        ));
+
+        field.rebuild(false);
+        assert!(!field.is_focused());
+        assert!(field.type_a().is_empty());
+        assert!(field.click().is_empty());
+        assert!(!field.is_focused());
+
+        field.rebuild(true);
+        assert!(!field.is_focused());
+        assert!(field.type_a().is_empty());
+        assert!(matches!(
+            field.click().as_slice(),
+            [Message::ExtensionFocus(id)] if id == "name"
+        ));
+        assert!(field.is_focused());
+        assert!(matches!(
+            field.type_a().as_slice(),
+            [Message::ExtensionField(id, value, Some(callback))]
+                if id == "name" && value == "a" && callback == "changed"
+        ));
     }
 }

@@ -13,7 +13,7 @@ pub struct Release {
 
 pub async fn check() -> Result<Release, String> {
     let output = tokio::process::Command::new("bun")
-        .arg(data_dir().join("runtime/updater.mjs"))
+        .arg(data_dir().join("runtime/updater.ts"))
         .args(["check", env!("CARGO_PKG_VERSION")])
         .kill_on_drop(true)
         .output()
@@ -38,7 +38,7 @@ pub async fn install(version: String) -> Result<(), String> {
             std::env::var("PATH").unwrap_or_default()
         ))
         .arg("bun")
-        .arg(data_dir().join("runtime/updater.mjs"))
+        .arg(data_dir().join("runtime/updater.ts"))
         .args(["install", &version, env!("CARGO_PKG_VERSION")])
         .output()
         .await

@@ -478,14 +478,14 @@ impl Session {
             .map(PathBuf::from)
             .unwrap_or_else(|| {
                 let installed = data_dir().join("runtime");
-                if installed.join("host.mjs").exists() {
+                if installed.join("host.ts").exists() {
                     installed
                 } else {
                     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("runtime")
                 }
             });
         let mut process = Command::new("bun")
-            .arg(runtime.join("host.mjs"))
+            .arg(runtime.join("host.ts"))
             .process_group(0)
             .env(
                 "SUPER_SPACE_AI_CONFIG",

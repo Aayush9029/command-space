@@ -53,7 +53,7 @@ if [[ "$profile" != --prebuilt ]]; then
   done
 fi
 required_files=(
-  runtime/host.mjs
+  runtime/host.ts
   runtime/bun.lock
   scripts/start-daemon.sh
   scripts/migrate-legacy.py
@@ -173,6 +173,7 @@ python3 scripts/migrate-legacy.py migrate
 mkdir -p "$install_root/bin" "$install_root/runtime" "$HOME/.local/bin" "$HOME/.config/systemd/user" "$HOME/.local/share/applications"
 install -m 755 "$binary" "$install_root/bin/super-space.new"
 mv "$install_root/bin/super-space.new" "$install_root/bin/super-space"
+bun run --cwd runtime build
 rsync -a --delete --exclude node_modules --exclude tests runtime/ "$install_root/runtime/"
 if [[ "$profile" == --prebuilt ]]; then
   rsync -a --delete runtime/node_modules/ "$install_root/runtime/node_modules/"
